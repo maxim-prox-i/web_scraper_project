@@ -1,15 +1,16 @@
 """
-Module contenant la classe KeywordSearcher pour rechercher des mots clés dans des pages web.
+Module contenant la classe KeywordSearcher pour rechercher des mots-clés dans les pages web.
 """
+import os
 import re
 import time
-import random
 import requests
 import threading
+import logging
+import csv
+import tempfile
 import datetime
 import json
-import os
-import csv
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
@@ -17,18 +18,32 @@ from tqdm import tqdm
 
 
 class KeywordSearcher:
-    def __init__(self, input_file, output_file=None, max_threads=10):
+    def __init__(self, input_file, keywords, case_sensitive=False, temp_dir=None, max_threads=10):
         """
-        Initialise le chercheur de mots clés.
+        Initialise le chercheur de mots-clés.
         
         Args:
             input_file (str): Fichier contenant les URLs à analyser
-            output_file (str, optional): Fichier de sortie pour les résultats
+            keywords (list): Liste de mots-clés à rechercher
+            case_sensitive (bool): Si True, respecte la casse des mots-clés
+            temp_dir (str, optional): Répertoire temporaire pour les résultats
             max_threads (int, optional): Nombre maximum de threads à utiliser
         """
         self.input_file = input_file
-        self.output_file = output_file or f"{os.path.splitext(input_file)[0]}-keywords.csv"
+        self.keywords = keywords
+        self.case_sensitive = case_sensitive
         self.max_threads = max_threads
+        
+        # Créer un répertoire temporaire pour les résultats
+        if temp_dir:
+            self.temp_dir = temp_dir
+        else:
+            self.temp_dir = tempfile.mkdtemp(prefix="keyword_search_")
+            
+        # Nom de fichier de sortie basé sur la date et l'heure actuelles
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.output_file = os.path.join(self.temp_dir, f"keyword_results_{timestamp}.csv")
+        self.stats_file = os.path.join(self.temp_dir, f"search_stats_{timestamp}.json")
         
         # Threads et synchronisation
         self.lock = threading.RLock()
@@ -44,46 +59,68 @@ class KeywordSearcher:
         self.results = []
         self.results_lock = threading.Lock()
         
-        # Pour stocker les mots clés
-        self.keywords = []
-        self.exact_matches = []  # Pour les mots entre guillemets
-        
         # Barre de progression
         self.pbar = None
         
-        # Désactiver les avertissements SSL
-        requests.packages.urllib3.disable_warnings(
-            requests.packages.urllib3.exceptions.InsecureRequestWarning
-        )
+        # Statistiques
+        self.stats = {
+            "keywords": self.keywords,
+            "case_sensitive": self.case_sensitive,
+            "total_urls": 0,
+            "processed_urls": 0,
+            "urls_with_matches": 0,
+            "total_matches": 0,
+            "matches_per_keyword": {keyword: 0 for keyword in self.keywords},
+            "start_time": datetime.datetime.now().isoformat()
+        }
+        
+        # Configuration du logger
+        self.logger = self._setup_logger()
+
+    def __del__(self):
+        """Ferme les sessions HTTP lorsque l'objet est détruit"""
+        if hasattr(self, 'session_pool'):
+            for session in self.session_pool:
+                try:
+                    session.close()
+                except:
+                    pass
+        elif hasattr(self, 'session'):
+            try:
+                self.session.close()
+            except:
+                pass
+
+    def _setup_logger(self):
+        """Configure le logger pour cette classe"""
+        logger = logging.getLogger("KeywordSearcher")
+        logger.setLevel(logging.INFO)
+        
+        # Vérifier si des handlers sont déjà configurés
+        if not logger.handlers:
+            # Créer le handler pour fichier
+            file_handler = logging.FileHandler("keyword_searcher.log")
+            file_handler.setLevel(logging.INFO)
+            
+            # Créer le handler pour console
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            
+            # Créer le format
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            file_handler.setFormatter(formatter)
+            console_handler.setFormatter(formatter)
+            
+            # Ajouter les handlers au logger
+            logger.addHandler(file_handler)
+            logger.addHandler(console_handler)
+        
+        return logger
     
     def __del__(self):
         """Ferme les sessions HTTP lorsque l'objet est détruit"""
         for session in self.session_pool:
             session.close()
-    
-    def set_keywords(self, keywords_string):
-        """
-        Définit les mots clés à rechercher à partir d'une chaîne.
-        
-        Args:
-            keywords_string (str): Chaîne contenant les mots clés, potentiellement entre guillemets
-        """
-        self.keywords = []
-        self.exact_matches = []
-        
-        # Trouver les termes entre guillemets
-        exact_pattern = r'"([^"]+)"'
-        exact_matches = re.findall(exact_pattern, keywords_string)
-        for exact in exact_matches:
-            self.exact_matches.append(exact)
-            # Remplacer les termes exacts par des espaces pour éviter de les traiter deux fois
-            keywords_string = keywords_string.replace(f'"{exact}"', ' ')
-        
-        # Traiter les mots clés restants
-        remaining_keywords = [k.strip().lower() for k in keywords_string.split() if k.strip()]
-        self.keywords = remaining_keywords
-        
-        return len(self.keywords) + len(self.exact_matches)
     
     def get_random_headers(self):
         """Génère des en-têtes HTTP aléatoires qui imitent un navigateur"""
@@ -118,45 +155,100 @@ class KeywordSearcher:
             self.session_index = (self.session_index + 1) % len(self.session_pool)
             return session
     
-    def check_keywords_in_text(self, text):
+    def search_keywords_in_text(self, text, url):
         """
-        Vérifie si le texte contient les mots clés recherchés.
+        Recherche les mots-clés dans le texte et retourne les résultats.
         
         Args:
-            text (str): Le texte à analyser
-            
+            text (str): Texte de la page web
+            url (str): URL de la page web
+        
         Returns:
-            dict: Dictionnaire avec les mots clés trouvés et leur nombre d'occurrences
+            list: Liste des résultats pour chaque mot-clé trouvé
         """
-        results = {}
+        search_results = []
+        soup = BeautifulSoup(text, 'html.parser')
         
-        # Traiter le texte pour les recherches non sensibles à la casse
-        text_lower = text.lower()
+        # Extraire le titre
+        title = soup.title.string if soup.title else "Sans titre"
         
-        # Vérifier les mots clés normaux (non sensibles à la casse)
+        # Extraire le texte de la page sans balises HTML
+        page_content = soup.get_text(" ", strip=True)
+        
+        # Récupérer l'aperçu du contenu (premiers 200 caractères)
+        content_preview = page_content[:200] + "..." if len(page_content) > 200 else page_content
+        
+        # Vérifier si nous avons des patterns précompilés, sinon les créer
+        if not hasattr(self, 'keyword_patterns'):
+            self.keyword_patterns = {}
+            for keyword in self.keywords:
+                if self.case_sensitive:
+                    self.keyword_patterns[keyword] = re.compile(re.escape(keyword))
+                else:
+                    self.keyword_patterns[keyword] = re.compile(re.escape(keyword), re.IGNORECASE)
+        
+        # Recherche pour chaque mot-clé
         for keyword in self.keywords:
-            count = text_lower.count(keyword.lower())
-            if count > 0:
-                results[keyword] = count
+            # Utiliser le pattern précompilé
+            pattern = self.keyword_patterns[keyword]
+            
+            matches = pattern.findall(page_content)
+            match_count = len(matches)
+            
+            if match_count > 0:
+                # Mettre à jour les statistiques
+                with self.results_lock:
+                    self.stats["total_matches"] += match_count
+                    self.stats["matches_per_keyword"][keyword] += match_count
+                
+                # Extraire les contextes d'occurrence de manière plus efficace
+                contexts = []
+                # Limiter le nombre de contextes à extraire pour les performances
+                matches_to_process = pattern.finditer(page_content)
+                context_count = 0
+                
+                for match in matches_to_process:
+                    if context_count >= 5:  # Limiter à 5 contextes max
+                        break
+                        
+                    start = max(0, match.start() - 50)
+                    end = min(len(page_content), match.end() + 50)
+                    context = page_content[start:end].replace("\n", " ")
+                    if start > 0:
+                        context = "..." + context
+                    if end < len(page_content):
+                        context = context + "..."
+                    
+                    # Mettre en évidence le mot-clé dans le contexte (pour la lisibilité)
+                    if self.case_sensitive:
+                        highlighted = context.replace(keyword, f"**{keyword}**")
+                    else:
+                        # Pour respecter la casse originale même en mode insensible
+                        original_match = match.group(0)
+                        highlighted = context.replace(original_match, f"**{original_match}**")
+                    
+                    contexts.append(highlighted)
+                    context_count += 1
+                
+                # Si plus de 5 correspondances, ajouter une note
+                if match_count > 5:
+                    contexts.append(f"...et {match_count - 5} autres occurrences")
+                
+                # Ajouter le résultat
+                result = {
+                    "url": url,
+                    "title": title,
+                    "keyword": keyword,
+                    "matches": match_count,
+                    "preview": content_preview,
+                    "contexts": contexts
+                }
+                search_results.append(result)
         
-        # Vérifier les correspondances exactes (sensibles à la casse)
-        for exact in self.exact_matches:
-            count = text.count(exact)  # Pas de conversion en minuscules ici
-            if count > 0:
-                results[f'"{exact}"'] = count
-        
-        return results
+        return search_results
     
     def process_url(self, url):
-        """
-        Traite une URL, vérifie si elle contient les mots clés recherchés.
-        
-        Args:
-            url (str): L'URL à analyser
-            
-        Returns:
-            dict: Résultat de l'analyse
-        """
+        """Traite une URL et cherche les mots-clés dans la page"""
         url = url.strip()
         if not url:
             return None
@@ -183,64 +275,72 @@ class KeywordSearcher:
             # Vérifier si c'est du HTML
             if 'text/html' not in response.headers.get('Content-Type', '').lower():
                 self.pbar.update(1)
-                return {"url": url, "keywords_found": {}, "status": "not_html"}
-            
-            # Parser le HTML
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Extraire le texte visible
-            text = soup.get_text(" ", strip=True)
-            
-            # Vérifier les mots clés
-            keywords_found = self.check_keywords_in_text(text)
-            status = "keywords_found" if keywords_found else "no_keywords_found"
-            
-            # Créer le résultat
-            result = {
-                "url": url,
-                "keywords_found": keywords_found,
-                "status": status,
-                "title": soup.title.string if soup.title else "No title"
-            }
-            
-            # Si des mots clés ont été trouvés, ajouter le résultat
-            if keywords_found:
                 with self.results_lock:
-                    self.results.append(result)
+                    self.stats["processed_urls"] += 1
+                return {"url": url, "status": "not_html", "results": []}
+            
+            # Rechercher les mots-clés
+            search_results = self.search_keywords_in_text(response.text, url)
+            
+            # Mettre à jour les statistiques
+            with self.results_lock:
+                self.stats["processed_urls"] += 1
+                if search_results:
+                    self.stats["urls_with_matches"] += 1
+                    self.results.extend(search_results)
             
             # Mettre à jour la barre de progression
             self.pbar.update(1)
             
             # Pause aléatoire courte pour respect des robots
-            time.sleep(random.uniform(0.2, 0.5))
+            time.sleep(0.2)
             
-            return result
+            return {"url": url, "status": "success", "results": search_results}
             
         except requests.RequestException as e:
             error_type = type(e).__name__
             self.pbar.update(1)
-            return {"url": url, "keywords_found": {}, "status": f"error_{error_type}"}
+            with self.results_lock:
+                self.stats["processed_urls"] += 1
+            return {"url": url, "status": f"error_{error_type}", "results": []}
         
         except Exception as e:
             self.pbar.update(1)
-            return {"url": url, "keywords_found": {}, "status": f"error: {str(e)}"}
+            with self.results_lock:
+                self.stats["processed_urls"] += 1
+            return {"url": url, "status": "error", "results": []}
     
     def save_results(self):
         """Sauvegarde les résultats dans un fichier CSV"""
         with open(self.output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['url', 'title', 'keywords', 'occurrences', 'status']
+            fieldnames = ['url', 'title', 'keyword', 'matches', 'preview', 'contexts']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             
             for result in self.results:
-                for keyword, occurrences in result['keywords_found'].items():
-                    writer.writerow({
-                        'url': result['url'],
-                        'title': result.get('title', 'No title'),
-                        'keywords': keyword,
-                        'occurrences': occurrences,
-                        'status': result['status']
-                    })
+                # Convertir la liste de contextes en une chaîne formatée
+                contexts_str = " | ".join(result["contexts"])
+                
+                writer.writerow({
+                    'url': result['url'],
+                    'title': result['title'],
+                    'keyword': result['keyword'],
+                    'matches': result['matches'],
+                    'preview': result['preview'],
+                    'contexts': contexts_str
+                })
+    
+    def save_stats(self):
+        """Sauvegarde les statistiques dans un fichier JSON"""
+        # Ajouter le temps de fin et la durée
+        self.stats["end_time"] = datetime.datetime.now().isoformat()
+        start = datetime.datetime.fromisoformat(self.stats["start_time"])
+        end = datetime.datetime.fromisoformat(self.stats["end_time"])
+        self.stats["duration_seconds"] = (end - start).total_seconds()
+        
+        # Sauvegarder le fichier
+        with open(self.stats_file, 'w', encoding='utf-8') as f:
+            json.dump(self.stats, f, indent=2)
     
     def format_time(self, seconds):
         """Formate les secondes en format HH:MM:SS"""
@@ -250,21 +350,12 @@ class KeywordSearcher:
     
     def run(self, progress_callback=None):
         """
-        Exécute la recherche de mots clés sur toutes les URLs
+        Exécute la recherche de mots-clés sur toutes les URLs
         
         Args:
             progress_callback (callable, optional): Fonction callback pour mettre à jour la progression
                 Signature: callback(current_progress, max_progress, status_message)
-                
-        Returns:
-            tuple: (nombre d'URLs avec mots clés, nombre total d'URLs, fichier de sortie)
         """
-        if not self.keywords and not self.exact_matches:
-            error_msg = "Aucun mot clé défini pour la recherche"
-            if progress_callback:
-                progress_callback(0, 0, error_msg)
-            return 0, 0, self.output_file
-        
         start_time = time.time()
         
         # Lire les URLs depuis le fichier
@@ -273,20 +364,23 @@ class KeywordSearcher:
                 urls = [line.strip() for line in f if line.strip()]
         except Exception as e:
             error_msg = f"Erreur lors de la lecture du fichier {self.input_file}: {str(e)}"
+            self.logger.error(error_msg)
             if progress_callback:
                 progress_callback(0, 0, error_msg)
-            return 0, 0, self.output_file
+            return None
         
         total_urls = len(urls)
-        keyword_str = ', '.join(self.keywords + [f'"{ex}"' for ex in self.exact_matches])
+        self.stats["total_urls"] = total_urls
+        
+        self.logger.info(f"Recherche de mots-clés dans {total_urls} URLs depuis {self.input_file}")
+        self.logger.info(f"Mots-clés: {', '.join(self.keywords)}")
         
         if progress_callback:
-            progress_callback(0, total_urls, 
-                            f"Démarrage de la recherche de {len(self.keywords) + len(self.exact_matches)} mot(s) clé(s) ({keyword_str}) dans {total_urls} URLs")
+            progress_callback(0, total_urls, f"Démarrage de la recherche pour {total_urls} URLs")
         
         # Initialiser la barre de progression
-        self.pbar = tqdm(total=total_urls, desc="Recherche de mots clés", 
-                         bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
+        self.pbar = tqdm(total=total_urls, desc="Recherche de mots-clés", 
+                          bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
         
         with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
             # Soumettre toutes les URLs
@@ -307,12 +401,20 @@ class KeywordSearcher:
                 # Formater en HH:MM:SS
                 eta_formatted = self.format_time(eta_seconds)
                 
+                # Mots-clés trouvés jusqu'à présent
+                with self.results_lock:
+                    matches_found = self.stats["total_matches"]
+                    urls_with_matches = self.stats["urls_with_matches"]
+                
+                success_rate = f"{(urls_with_matches / processed * 100):.1f}%" if processed > 0 else "0.0%"
+                
+                # Mettre à jour la description de la barre
+                self.pbar.set_description(f"Recherche - ETA: {eta_formatted} - Correspondances: {matches_found}")
+                
                 # Mise à jour du callback de progression
                 if progress_callback:
-                    keywords_found = len(self.results)
-                    found_percent = f"{(keywords_found / processed * 100):.1f}%" if processed > 0 else "0.0%"
-                    status_msg = f"Progression: {processed}/{total_urls} - Trouvés: {keywords_found} ({found_percent}) - ETA: {eta_formatted}"
-                    progress_callback(processed, total_urls, status_msg)
+                    progress_callback(processed, total_urls, 
+                                     f"Progression: {processed}/{total_urls} - Correspondances: {matches_found} - ETA: {eta_formatted}")
                 
                 # Si tous les URLs sont traités, sortir de la boucle
                 if processed >= total_urls:
@@ -324,32 +426,62 @@ class KeywordSearcher:
         # Sauvegarder les résultats
         self.save_results()
         
+        # Sauvegarder les statistiques
+        self.save_stats()
+        
         # Statistiques finales
         elapsed_time = time.time() - start_time
-        keywords_found = len(self.results)
-        success_rate = (keywords_found / total_urls) * 100 if total_urls > 0 else 0
         
         final_status = f"Recherche terminée en {self.format_time(elapsed_time)}\n" \
-                      f"URLs avec mots clés: {keywords_found}/{total_urls} ({success_rate:.1f}%)"
+                      f"Correspondances trouvées: {self.stats['total_matches']} dans {self.stats['urls_with_matches']}/{total_urls} URLs"
+        
+        self.logger.info(final_status)
+        self.logger.info(f"Résultats sauvegardés dans {self.output_file}")
         
         # Dernière mise à jour du callback de progression
         if progress_callback:
             progress_callback(total_urls, total_urls, final_status)
-
-        # Sauvegarder les statistiques
-        stats = {
-            "input_file": self.input_file,
-            "output_file": self.output_file,
-            "total_urls": total_urls,
-            "keywords_searched": self.keywords + [f'"{ex}"' for ex in self.exact_matches],
-            "urls_with_keywords": keywords_found,
-            "success_rate": success_rate,
-            "elapsed_time": elapsed_time,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
         
-        stats_file = f"{os.path.splitext(self.output_file)[0]}-stats.json"
-        with open(stats_file, 'w', encoding='utf-8') as f:
-            json.dump(stats, f, indent=2)
-            
-        return keywords_found, total_urls, self.output_file
+        return {
+            "output_file": self.output_file,
+            "stats_file": self.stats_file,
+            "stats": self.stats,
+            "temp_dir": self.temp_dir
+        }
+
+
+if __name__ == "__main__":
+    print("=== RECHERCHE DE MOTS-CLÉS ===")
+    print("Ce script parcourt une liste d'URLs et recherche des mots-clés spécifiques dans les pages web.")
+    
+    input_file = input("Fichier contenant les URLs (par défaut: urls.txt): ") or "urls.txt"
+    keywords_input = input("Mots-clés à rechercher (séparés par des virgules): ")
+    keywords = [k.strip() for k in keywords_input.split(',') if k.strip()]
+    
+    case_sensitive = input("Respecter la casse? (o/n, par défaut: non): ").lower() == 'o'
+    
+    max_threads_input = input("Nombre de threads (par défaut: 10): ")
+    max_threads = int(max_threads_input) if max_threads_input.strip() else 10
+    
+    print(f"\nDémarrage de la recherche de mots-clés à partir de {input_file}")
+    print(f"Mots-clés recherchés: {', '.join(keywords)}")
+    print(f"Casse respectée: {'Oui' if case_sensitive else 'Non'}")
+    print(f"Utilisation de {max_threads} threads en parallèle")
+    
+    try:
+        # Désactiver les avertissements SSL
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        searcher = KeywordSearcher(input_file, keywords, case_sensitive, max_threads=max_threads)
+        result = searcher.run()
+        
+        if result:
+            print(f"\nRecherche terminée avec succès!")
+            print(f"Résultats enregistrés dans: {result['output_file']}")
+            print(f"Statistiques enregistrées dans: {result['stats_file']}")
+    
+    except KeyboardInterrupt:
+        print("\nRecherche interrompue par l'utilisateur.")
+    except Exception as e:
+        print(f"\nUne erreur est survenue: {e}")

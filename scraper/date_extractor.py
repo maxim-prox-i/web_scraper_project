@@ -13,7 +13,7 @@ import threading
 import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dateutil.parser import parse as parse_date
 from fake_useragent import UserAgent
 from tqdm import tqdm
@@ -59,6 +59,14 @@ class DateExtractor:
             r'date[\"\']\?\s*:\s*[\"\']\?([^\"\']+)[\"\']\?',
         ]
         
+        self.date_patterns_compiled = [re.compile(pattern) for pattern in self.date_patterns]
+        self.url_date_patterns_compiled = [
+            re.compile(r'/(\d{4}/\d{1,2}/\d{1,2})/'),
+            re.compile(r'/(\d{4}-\d{1,2}-\d{1,2})/'),
+            re.compile(r'/(\d{4}/\d{1,2})/'),
+            re.compile(r'(\d{4}-\d{2}-\d{2})')
+        ]
+        
         # Attributs HTML et meta tags pour les dates
         self.date_attributes = [
             'datetime', 'pubdate', 'date', 'published', 'published_time',
@@ -86,6 +94,20 @@ class DateExtractor:
         
         # Configuration du logger
         self.logger = self._setup_logger()
+    
+    def __del__(self):
+        """Ferme les sessions HTTP lorsque l'objet est détruit"""
+        if hasattr(self, 'session_pool'):
+            for session in self.session_pool:
+                try:
+                    session.close()
+                except:
+                    pass
+        elif hasattr(self, 'session'):
+            try:
+                self.session.close()
+            except:
+                pass
     
     def _setup_logger(self):
         """Configure le logger pour cette classe"""
@@ -387,17 +409,24 @@ class DateExtractor:
         
         # Initialiser la barre de progression
         self.pbar = tqdm(total=total_urls, desc="Extraction des dates", 
-                          bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
+                        bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
+        
+        # Traitement par lots pour réduire les frais généraux
+        batch_size = 50  # Taille optimale du lot
         
         with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            # Soumettre toutes les URLs
-            future_to_url = {executor.submit(self.process_url, url): url for url in urls}
-            
-            # Mise à jour de la barre de progression avec ETA formaté
-            processed = 0
-            while processed < total_urls:
-                time.sleep(0.5)  # Mise à jour toutes les 0.5 secondes
-                processed = sum(1 for future in future_to_url if future.done())
+            # Traitement par lots des URLs
+            for i in range(0, len(urls), batch_size):
+                batch = urls[i:i+batch_size]
+                futures = {executor.submit(self.process_url, url): url for url in batch}
+                
+                # Attendre que le lot soit terminé
+                for future in as_completed(futures):
+                    # Collecter les résultats si nécessaire
+                    pass
+                    
+                # Mise à jour après chaque lot
+                processed = min(i + batch_size, total_urls)
                 
                 # Calculer et formater l'ETA
                 elapsed = time.time() - start_time
@@ -413,16 +442,13 @@ class DateExtractor:
                 success_rate = f"{(dates_found / processed * 100):.1f}%" if processed > 0 else "0.0%"
                 
                 # Mettre à jour la description de la barre
+                self.pbar.update(len(batch))
                 self.pbar.set_description(f"Extraction des dates - ETA: {eta_formatted} - Taux: {success_rate}")
                 
-                # Mise à jour du callback de progression
+                # Mise à jour du callback de progression moins fréquente
                 if progress_callback:
                     progress_callback(processed, total_urls, 
-                                     f"Progression: {processed}/{total_urls} - Taux: {success_rate} - ETA: {eta_formatted}")
-                
-                # Si tous les URLs sont traités, sortir de la boucle
-                if processed >= total_urls:
-                    break
+                                    f"Progression: {processed}/{total_urls} - Taux: {success_rate} - ETA: {eta_formatted}")
         
         # Fermer la barre de progression
         self.pbar.close()
@@ -436,7 +462,7 @@ class DateExtractor:
         success_rate = (dates_found / total_urls) * 100 if total_urls > 0 else 0
         
         final_status = f"Extraction terminée en {self.format_time(elapsed_time)}\n" \
-                      f"Dates trouvées: {dates_found}/{total_urls} ({success_rate:.1f}%)"
+                    f"Dates trouvées: {dates_found}/{total_urls} ({success_rate:.1f}%)"
         
         self.logger.info(final_status)
         self.logger.info(f"Résultats sauvegardés dans {self.output_file}")

@@ -56,7 +56,40 @@ class SiteScraper:
         requests.packages.urllib3.disable_warnings(
             requests.packages.urllib3.exceptions.InsecureRequestWarning
         )
+        
+        self.normalize_cache = {}  # Cache pour les URLs normalisées
+        
+    def __del__(self):
+        """Ferme les sessions HTTP lorsque l'objet est détruit"""
+        if hasattr(self, 'session_pool'):
+            for session in self.session_pool:
+                try:
+                    session.close()
+                except:
+                    pass
+        elif hasattr(self, 'session'):
+            try:
+                self.session.close()
+            except:
+                pass
     
+    def normalize_url(self, url):
+        """Normalise une URL pour éviter les duplications avec cache"""
+        if url in self.normalize_cache:
+            return self.normalize_cache[url]
+            
+        parsed = urlparse(url)
+        # Supprimer les fragments
+        cleaned_url = parsed._replace(fragment='').geturl()
+        # Décoder les caractères URL encodés
+        cleaned_url = unquote(cleaned_url)
+        # Supprimer les slashes finaux (sauf si c'est la racine)
+        if cleaned_url.endswith('/') and len(cleaned_url.rstrip('/')) > len(parsed.scheme) + 3:
+            cleaned_url = cleaned_url.rstrip('/')
+        
+        self.normalize_cache[url] = cleaned_url
+        return cleaned_url
+
     def _setup_logger(self):
         """Configure le logger pour cette classe"""
         logger = logging.getLogger("SiteScraper")
@@ -263,8 +296,8 @@ class SiteScraper:
                         urls.add(urljoin(base_url, match))
         
         return urls
-    
-    def extract_sitemap_urls(self):
+
+    def extract_sitemap_urls(self, progress_callback=None):
         """Extrait les URLs des sitemaps"""
         sitemap_urls = []
         
@@ -277,9 +310,23 @@ class SiteScraper:
             f"{self.base_url}/sitemaps/"
         ]
         
+        # Informer sur le nombre total d'étapes
+        total_steps = len(sitemap_locations) + 1  # +1 pour robots.txt
+        current_step = 0
+        
+        if progress_callback:
+            progress_callback(current_step, total_steps, 
+                            f"Étape {current_step}/{total_steps}: Initialisation de la recherche des sitemaps...")
+        
         # Vérifier robots.txt pour les sitemaps
         try:
+            current_step += 1
             robots_url = f"{self.base_url}/robots.txt"
+            
+            if progress_callback:
+                progress_callback(current_step, total_steps, 
+                                f"Étape {current_step}/{total_steps}: Vérification de robots.txt ({robots_url})...")
+            
             self.logger.info(f"Vérification de robots.txt: {robots_url}")
             
             response = self.make_request(robots_url)
@@ -288,21 +335,48 @@ class SiteScraper:
                 # Rechercher les lignes Sitemap: URL
                 sitemap_matches = re.findall(r'Sitemap:\s*(\S+)', robots_content, re.IGNORECASE)
                 sitemap_locations.extend(sitemap_matches)
+                
+                if progress_callback:
+                    progress_callback(current_step, total_steps, 
+                                    f"Étape {current_step}/{total_steps}: Trouvé {len(sitemap_matches)} sitemaps dans robots.txt")
+                
                 self.logger.info(f"Trouvé {len(sitemap_matches)} références de sitemaps dans robots.txt")
+            else:
+                if progress_callback:
+                    progress_callback(current_step, total_steps, 
+                                    f"Étape {current_step}/{total_steps}: Aucun fichier robots.txt trouvé")
         except Exception as e:
+            if progress_callback:
+                progress_callback(current_step, total_steps, 
+                                f"Étape {current_step}/{total_steps}: Erreur lors de l'accès à robots.txt: {str(e)[:50]}...")
             self.logger.error(f"Erreur lors de l'accès à robots.txt: {e}")
         
+        # Mettre à jour le nombre total d'étapes
+        total_steps = current_step + len(sitemap_locations)
+        
         # Vérifier chaque emplacement potentiel de sitemap
-        for sitemap_url in sitemap_locations:
+        for i, sitemap_url in enumerate(sitemap_locations):
             try:
+                current_step += 1
+                
+                if progress_callback:
+                    progress_callback(current_step, total_steps, 
+                                    f"Étape {current_step}/{total_steps}: Vérification du sitemap {sitemap_url}...")
+                
                 self.logger.info(f"Vérification du sitemap: {sitemap_url}")
                 response = self.make_request(sitemap_url)
                 
                 if not response or response.status_code != 200:
+                    if progress_callback:
+                        progress_callback(current_step, total_steps, 
+                                        f"Étape {current_step}/{total_steps}: Sitemap non trouvé à {sitemap_url}")
                     continue
                 
                 # Vérifier si c'est un sitemap XML valide
                 if 'xml' not in response.headers.get('Content-Type', '').lower() and not sitemap_url.endswith(('.xml', '.xml.gz')):
+                    if progress_callback:
+                        progress_callback(current_step, total_steps, 
+                                        f"Étape {current_step}/{total_steps}: Format non XML à {sitemap_url}")
                     continue
                 
                 # Parser le XML
@@ -316,16 +390,36 @@ class SiteScraper:
                     }
                     
                     # Extraire les URLs des éléments <url>
+                    url_count = 0
                     for url_elem in root.findall('.//sm:url/sm:loc', namespaces) or root.findall('.//url/loc'):
                         if url_elem.text:
                             url = url_elem.text.strip()
                             if self.is_valid_url(url):
                                 sitemap_urls.append(url)
+                                url_count += 1
+                    
+                    if progress_callback:
+                        progress_callback(current_step, total_steps, 
+                                        f"Étape {current_step}/{total_steps}: Trouvé {url_count} URLs dans {sitemap_url}")
                     
                     # Vérifier s'il s'agit d'un sitemap index et traiter les sous-sitemaps
-                    for sitemap_elem in root.findall('.//sm:sitemap/sm:loc', namespaces) or root.findall('.//sitemap/loc'):
+                    sitemap_index_count = 0
+                    sub_sitemaps = root.findall('.//sm:sitemap/sm:loc', namespaces) or root.findall('.//sitemap/loc')
+                    
+                    if sub_sitemaps:
+                        if progress_callback:
+                            progress_callback(current_step, total_steps, 
+                                            f"Étape {current_step}/{total_steps}: Trouvé {len(sub_sitemaps)} sous-sitemaps dans {sitemap_url}")
+                    
+                    for sitemap_elem in sub_sitemaps:
+                        sitemap_index_count += 1
                         if sitemap_elem.text:
                             sub_sitemap_url = sitemap_elem.text.strip()
+                            
+                            if progress_callback:
+                                progress_callback(current_step, total_steps, 
+                                                f"Étape {current_step}/{total_steps}: Traitement du sous-sitemap {sitemap_index_count}/{len(sub_sitemaps)}: {sub_sitemap_url}")
+                            
                             self.logger.info(f"Traitement du sous-sitemap: {sub_sitemap_url}")
                             
                             # Requête pour le sous-sitemap
@@ -334,23 +428,43 @@ class SiteScraper:
                                 try:
                                     sub_root = ET.fromstring(sub_response.content)
                                     # Extraire les URLs des éléments <url>
+                                    sub_url_count = 0
                                     for url_elem in sub_root.findall('.//sm:url/sm:loc', namespaces) or sub_root.findall('.//url/loc'):
                                         if url_elem.text:
                                             url = url_elem.text.strip()
                                             if self.is_valid_url(url):
                                                 sitemap_urls.append(url)
+                                                sub_url_count += 1
+                                    
+                                    if progress_callback:
+                                        progress_callback(current_step, total_steps, 
+                                                        f"Étape {current_step}/{total_steps}: Trouvé {sub_url_count} URLs dans le sous-sitemap {sitemap_index_count}/{len(sub_sitemaps)}")
+                                    
                                 except ET.ParseError:
+                                    if progress_callback:
+                                        progress_callback(current_step, total_steps, 
+                                                        f"Étape {current_step}/{total_steps}: Erreur de parsing du sous-sitemap {sitemap_index_count}/{len(sub_sitemaps)}")
                                     self.logger.error(f"Erreur de parsing du sous-sitemap: {sub_sitemap_url}")
                 
                 except ET.ParseError:
+                    if progress_callback:
+                        progress_callback(current_step, total_steps, 
+                                        f"Étape {current_step}/{total_steps}: Erreur de parsing du sitemap {sitemap_url}")
                     self.logger.error(f"Erreur de parsing du sitemap: {sitemap_url}")
             
             except Exception as e:
+                if progress_callback:
+                    progress_callback(current_step, total_steps, 
+                                    f"Étape {current_step}/{total_steps}: Erreur lors du traitement du sitemap {sitemap_url}: {str(e)[:50]}...")
                 self.logger.error(f"Erreur lors du traitement du sitemap {sitemap_url}: {e}")
+        
+        if progress_callback:
+            progress_callback(total_steps, total_steps, 
+                            f"Recherche des sitemaps terminée. Trouvé {len(sitemap_urls)} URLs au total.")
         
         self.logger.info(f"Extrait un total de {len(sitemap_urls)} URLs des sitemaps")
         return sitemap_urls
-    
+
     def scrape(self, progress_callback=None):
         """
         Exécute le scraping complet du site
@@ -358,22 +472,46 @@ class SiteScraper:
         Args:
             progress_callback (callable, optional): Fonction callback pour mettre à jour la progression
                 Signature: callback(current_progress, max_progress, status_message)
+                Retourne True si le scraping doit être interrompu, False sinon
         """
         self.logger.info(f"Début du scraping pour {self.start_url}")
         self.logger.info(f"Limite d'URLs définie à: {self.max_urls if self.max_urls else 'illimité'}")
+        
+        # Propriété pour permettre l'interruption
+        self.stop_requested = False
+        
+        if progress_callback:
+            should_stop = progress_callback(0, 1, f"Initialisation du scraping pour {self.start_url}...")
+            if should_stop:
+                return self.found_urls  # Interruption demandée
         
         # Créer le fichier de sortie s'il n'existe pas ou le vider s'il existe
         with open(self.output_file, 'w', encoding='utf-8') as f:
             f.write("")
         
         # Extraire d'abord les URLs des sitemaps
-        sitemap_urls = self.extract_sitemap_urls()
+        if progress_callback:
+            should_stop = progress_callback(0, 1, "Recherche des sitemaps et extraction des URLs...")
+            if should_stop:
+                return self.found_urls  # Interruption demandée
+        
+        # Passer le callback de progression à la fonction d'extraction des sitemaps
+        sitemap_urls = self.extract_sitemap_urls(progress_callback)
         
         # Vérifier si on a atteint la limite avant de continuer
         limit_reached = False
         
+        # Cache pour les URLs normalisées
+        if not hasattr(self, 'normalize_cache'):
+            self.normalize_cache = {}
+        
         # Ajouter les URLs des sitemaps à la queue et aux URLs trouvées
         for url in sitemap_urls:
+            # Vérifier si une interruption a été demandée
+            if self.stop_requested:
+                self.logger.info("Interruption du scraping demandée")
+                break
+                
             normalized_url = self.normalize_url(url)
             if normalized_url not in self.found_urls:
                 if self.save_url(normalized_url):
@@ -382,20 +520,36 @@ class SiteScraper:
                 self.queue.append(normalized_url)
         
         # Exécuter le BFS si la limite n'est pas atteinte
+        last_progress_update = time.time()
+        progress_update_interval = 0.5  # Réduire les mises à jour de progression
+        
         while self.queue and not limit_reached:
+            # Vérifier si une interruption a été demandée
+            if self.stop_requested:
+                self.logger.info("Interruption du scraping demandée")
+                break
+                
             # Vérifier à nouveau la limite avant chaque itération
             if self.max_urls and len(self.found_urls) >= self.max_urls:
                 self.logger.info(f"Limite d'URLs atteinte avant de traiter la prochaine URL: {len(self.found_urls)}/{self.max_urls}")
                 break
             
-            # Mettre à jour la progression si un callback est fourni
-            if progress_callback:
+            # Mettre à jour la progression si un callback est fourni (moins fréquemment)
+            current_time = time.time()
+            if progress_callback and (current_time - last_progress_update >= progress_update_interval):
+                last_progress_update = current_time
+                
+                status_message = f"URLs trouvées: {len(self.found_urls)}"
                 if self.max_urls:
-                    progress_callback(len(self.found_urls), self.max_urls, 
-                                     f"URLs trouvées: {len(self.found_urls)}/{self.max_urls}, Visitées: {len(self.visited)}, En file: {len(self.queue)}")
+                    should_stop = progress_callback(len(self.found_urls), self.max_urls, 
+                                    f"{status_message}/{self.max_urls}, Visitées: {len(self.visited)}, En file: {len(self.queue)}")
                 else:
-                    progress_callback(len(self.found_urls), 0, 
-                                     f"URLs trouvées: {len(self.found_urls)}, Visitées: {len(self.visited)}, En file: {len(self.queue)}")
+                    should_stop = progress_callback(len(self.found_urls), 0, 
+                                    f"{status_message}, Visitées: {len(self.visited)}, En file: {len(self.queue)}")
+                
+                if should_stop:
+                    self.logger.info("Interruption du scraping demandée via callback")
+                    break
                 
             current_url = self.queue.popleft()
             
@@ -406,12 +560,12 @@ class SiteScraper:
             # Marquer l'URL comme visitée
             self.visited.add(current_url)
             
-            # Afficher la progression
-            if len(self.visited) % 10 == 0:
+            # Afficher la progression (moins fréquemment)
+            if len(self.visited) % 50 == 0:  # Réduit de 10 à 50
                 self.logger.info(f"Progression: {len(self.found_urls)}/{self.max_urls if self.max_urls else 'illimité'} URLs trouvées, {len(self.visited)} visitées, {len(self.queue)} en attente")
             
-            # Délai aléatoire entre les requêtes
-            time.sleep(random.uniform(0.2, 0.5))
+            # Délai aléatoire entre les requêtes (réduit pour plus de rapidité)
+            time.sleep(random.uniform(0.1, 0.3))  # Réduit de 0.2-0.5 à 0.1-0.3
             
             # Faire la requête
             response = self.make_request(current_url)
@@ -437,36 +591,42 @@ class SiteScraper:
             if 'text/html' not in content_type:
                 continue
             
-            # Extraire les URLs de la page
-            new_urls = self.extract_urls_from_html(response.text, current_url)
+            # Extraire les URLs de la page - utiliser directement un set
+            new_urls = set(self.extract_urls_from_html(response.text, current_url))
+            
+            # Traitement par lots des nouvelles URLs pour plus d'efficacité
+            new_valid_urls = []
             
             # Filtrer et ajouter les nouvelles URLs à la queue
             for url in new_urls:
                 normalized_url = self.normalize_url(url)
                 if self.is_valid_url(normalized_url) and normalized_url not in self.visited and normalized_url not in self.queue:
-                    self.queue.append(normalized_url)
-                    
-                    # Vérifier si on a atteint la limite d'URLs
-                    if self.max_urls and len(self.found_urls) >= self.max_urls:
-                        limit_reached = True
-                        break
+                    new_valid_urls.append(normalized_url)
             
-            # Si la limite est atteinte lors de l'ajout des nouvelles URLs, sortir de la boucle
-            if limit_reached:
+            # Ajouter les URLs en une seule fois pour réduire les opérations sur la queue
+            self.queue.extend(new_valid_urls)
+            
+            # Vérifier si on a atteint la limite d'URLs
+            if self.max_urls and len(self.found_urls) >= self.max_urls:
+                limit_reached = True
                 break
         
         # Mise à jour finale du statut
         if progress_callback:
+            status_message = f"Terminé! {len(self.found_urls)}"
             if self.max_urls:
                 progress_callback(len(self.found_urls), self.max_urls, 
-                                 f"Terminé! {len(self.found_urls)}/{self.max_urls} URLs trouvées")
+                                f"{status_message}/{self.max_urls} URLs trouvées")
             else:
                 progress_callback(len(self.found_urls), len(self.found_urls), 
-                                 f"Terminé! {len(self.found_urls)} URLs trouvées")
+                                f"{status_message} URLs trouvées")
                 
         self.logger.info(f"Scraping terminé. {len(self.found_urls)} URLs trouvées et enregistrées dans {self.output_file}")
         return self.found_urls
 
+
+
+#region  Main
 
 if __name__ == "__main__":
     print("=== SCRAPER DE SITE WEB COMPLET ===")

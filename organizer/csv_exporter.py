@@ -9,6 +9,7 @@ import datetime
 import json
 import glob
 from tqdm import tqdm
+import subprocess
 
 
 class URLToCSVExporter:
@@ -89,19 +90,30 @@ class URLToCSVExporter:
                 progress_callback(0, 0, error_msg)
             return False
         
-        # Compter le nombre total d'URLs à traiter
+        # Compter le nombre total d'URLs à traiter - utiliser wc -l sous Linux/Mac ou équivalent sous Windows
         total_urls = 0
         for _, url_file in url_files:
-            with open(url_file, 'r', encoding='utf-8') as f:
-                total_urls += sum(1 for _ in f)
+            # Méthode optimisée pour compter les lignes
+            try:
+                if os.name == 'posix':  # Linux/Mac
+                    result = subprocess.run(['wc', '-l', url_file], capture_output=True, text=True)
+                    total_urls += int(result.stdout.split()[0])
+                else:  # Windows ou autre - méthode moins efficace mais fonctionnelle
+                    with open(url_file, 'rb') as f:
+                        # Compter les retours à la ligne
+                        total_urls += sum(1 for _ in iter(lambda: f.read(1024 * 1024).count(b'\n'), 0))
+            except Exception:
+                # Fallback en cas d'erreur
+                with open(url_file, 'r', encoding='utf-8') as f:
+                    total_urls += sum(1 for _ in f)
         
         self.stats["total_urls"] = total_urls
         
         if progress_callback:
             progress_callback(0, total_urls, f"Démarrage de l'export pour l'année {self.year} ({total_urls} URLs)")
         
-        # Préparer le fichier CSV
-        with open(self.output_file, 'w', encoding='utf-8', newline='') as csvfile:
+        # Préparer le fichier CSV - utiliser un buffer plus grand pour l'écriture
+        with open(self.output_file, 'w', encoding='utf-8', newline='', buffering=1024*1024) as csvfile:
             # Définir les en-têtes
             fieldnames = ["_id", "Name", "type", "Data", "Metadata", "Url", "Page", "Train status"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=';', quotechar='"', quoting=csv.QUOTE_ALL)
@@ -111,10 +123,13 @@ class URLToCSVExporter:
             
             # Initialiser la barre de progression
             pbar = tqdm(total=total_urls, desc=f"Export des URLs de {self.year}", 
-                       bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
+                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
             
             # Compteur pour le callback de progression
             processed_urls = 0
+            
+            # Taille de buffer pour la lecture
+            buffer_size = 8192  # 8KB buffer
             
             # Parcourir tous les fichiers d'URLs
             for month_name, url_file in url_files:
@@ -122,32 +137,54 @@ class URLToCSVExporter:
                 month_match = re.search(r'(\d{4})-(\d{2})\.urls\.txt', os.path.basename(url_file))
                 month = month_match.group(2) if month_match else "00"
                 
-                # Lire les URLs du fichier
+                # Lire les URLs du fichier en utilisant un buffer
                 with open(url_file, 'r', encoding='utf-8') as f:
+                    # Préparation du modèle de ligne pour réduire les allocations
+                    row_template = {
+                        "_id": "",
+                        "Name": "",
+                        "type": "web-site",
+                        "Data": None,  # Sera remplacé par l'URL
+                        "Metadata": "",
+                        "Url": "",
+                        "Page": None,  # Sera remplacé par l'URL
+                        "Train status": ""
+                    }
+                    
+                    # Traitement par lots
+                    batch_size = 1000
+                    urls_batch = []
+                    
                     for url in f:
                         url = url.strip()
                         if url:
-                            # Conformément à l'exemple fourni, mettre l'URL dans Data
-                            # et laisser vide _id, Name, Metadata, Url et Train status
-                            writer.writerow({
-                                "_id": "",
-                                "Name": "",
-                                "type": "web-site",
-                                "Data": url,
-                                "Metadata": "",
-                                "Url": "",
-                                "Page": url,
-                                "Train status": ""
-                            })
+                            row = row_template.copy()
+                            row["Data"] = url
+                            row["Page"] = url
+                            urls_batch.append(row)
                             
-                            # Mettre à jour la barre de progression
-                            pbar.update(1)
-                            
-                            # Mettre à jour le compteur et le callback
-                            processed_urls += 1
-                            if progress_callback and processed_urls % 100 == 0:
-                                progress_callback(processed_urls, total_urls, 
-                                                f"Export {self.year}: {processed_urls}/{total_urls} URLs")
+                            # Si le lot atteint la taille maximale, écrire et réinitialiser
+                            if len(urls_batch) >= batch_size:
+                                writer.writerows(urls_batch)
+                                processed_urls += len(urls_batch)
+                                pbar.update(len(urls_batch))
+                                urls_batch = []
+                                
+                                # Mettre à jour le callback
+                                if progress_callback and processed_urls % (batch_size * 2) == 0:
+                                    progress_callback(processed_urls, total_urls, 
+                                                    f"Export {self.year}: {processed_urls}/{total_urls} URLs")
+                    
+                    # Écrire le reste du lot
+                    if urls_batch:
+                        writer.writerows(urls_batch)
+                        processed_urls += len(urls_batch)
+                        pbar.update(len(urls_batch))
+                        
+                        # Mettre à jour le callback
+                        if progress_callback:
+                            progress_callback(processed_urls, total_urls, 
+                                            f"Export {self.year}: {processed_urls}/{total_urls} URLs")
             
             # Fermer la barre de progression
             pbar.close()
@@ -167,8 +204,8 @@ class URLToCSVExporter:
         
         # Message final
         final_status = f"Export terminé en {self.format_time(elapsed_time)}\n" \
-                      f"URLs exportées: {self.stats['total_urls']}\n" \
-                      f"Fichier CSV créé: {self.output_file}"
+                    f"URLs exportées: {self.stats['total_urls']}\n" \
+                    f"Fichier CSV créé: {self.output_file}"
         
         print(final_status)
         print(f"Statistiques sauvegardées dans: {stats_file}")

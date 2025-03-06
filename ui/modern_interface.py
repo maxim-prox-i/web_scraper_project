@@ -20,6 +20,7 @@ from scraper.date_extractor import DateExtractor
 from organizer.date_organizer import URLDateOrganizer
 from organizer.csv_exporter import URLToCSVExporter, MultiYearURLExporter
 from scraper.keyword_searcher import KeywordSearcher
+from scraper.keyword_searcher import KeywordSearcher
 
 
 # Définition des constantes de couleur
@@ -321,6 +322,9 @@ class ModernWebScraperApp:
         # Variables partagées entre onglets
         self.current_process = None  # Pour stocker le thread en cours
         
+        # Ajouter un événement pour interrompre proprement les threads
+        self.stop_event = threading.Event()
+        
         # Initialiser les onglets
         self._init_scraper_tab()
         self._init_date_extractor_tab()
@@ -599,6 +603,346 @@ class ModernWebScraperApp:
         
         # Ajouter le panneau de statistiques
         self._init_stats_panel(progress_card, "scraper")
+        
+    def _init_keyword_search_tab(self):
+        """Initialise l'onglet Recherche de Mots-clés avec un design moderne."""
+        frame = self.tab_keyword_search
+        
+        # Variables
+        self.keyword_input_file = tk.StringVar(value="")
+        self.keyword_search_terms = tk.StringVar(value="")
+        self.keyword_case_sensitive = tk.BooleanVar(value=False)
+        self.keyword_max_threads = tk.StringVar(value="10")
+        
+        # Conteneur principal
+        main_frame = ttk.Frame(frame, style="TFrame")
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Carte des paramètres
+        params_card = Card(main_frame, title="Paramètres de Recherche de Mots-clés")
+        params_card.pack(fill="x", pady=(0, 20))
+        
+        # Champs de formulaire
+        input_field = self.create_field(
+            params_card, 
+            "Fichier contenant les URLs:", 
+            self.keyword_input_file, 
+            self._browse_keyword_input, 
+            tooltip="Sélectionnez le fichier contenant les URLs à analyser."
+        )
+        input_field.pack(fill="x", pady=10)
+        
+        # Champ pour les mots-clés
+        keywords_frame = ttk.Frame(params_card, style="Field.TFrame")
+        keywords_frame.pack(fill="x", pady=10)
+        
+        keywords_label = ttk.Label(keywords_frame, text="Mots-clés à rechercher:", style="Normal.TLabel", width=25, anchor="w")
+        keywords_label.pack(side="left", padx=(0, 10))
+        
+        keywords_entry = ttk.Entry(keywords_frame, textvariable=self.keyword_search_terms)
+        keywords_entry.pack(side="left", fill="x", expand=True)
+        ToolTip(keywords_entry, "Entrez un ou plusieurs mots-clés séparés par des virgules. Utilisez des guillemets pour les expressions exactes, ex: \"maison bleue\"")
+        
+        # Option pour la casse
+        case_frame = ttk.Frame(params_card, style="Field.TFrame")
+        case_frame.pack(fill="x", pady=10)
+        
+        case_label = ttk.Label(case_frame, text="Respecter la casse:", style="Normal.TLabel", width=25, anchor="w")
+        case_label.pack(side="left", padx=(0, 10))
+        
+        case_check = ttk.Checkbutton(case_frame, variable=self.keyword_case_sensitive, style="TCheckbutton")
+        case_check.pack(side="left")
+        ToolTip(case_check, "Si coché, la recherche respectera les majuscules/minuscules")
+        
+        # Nombre de threads
+        threads_field = self.create_field(
+            params_card, 
+            "Nombre de threads:", 
+            self.keyword_max_threads, 
+            None, 
+            tooltip="Plus de threads = plus rapide, mais utilise plus de ressources."
+        )
+        threads_field.pack(fill="x", pady=10)
+        
+        # Bouton de démarrage
+        button_frame = ttk.Frame(params_card, style="TFrame")
+        button_frame.pack(fill="x", pady=(20, 10))
+        
+        self.keyword_start_button = ModernButton(
+            button_frame, 
+            text="▶️ Démarrer la Recherche", 
+            command=self._start_keyword_search,
+            style="primary"
+        )
+        self.keyword_start_button.pack(pady=10)
+        
+        # Carte de progression
+        progress_card = Card(main_frame, title="Progression")
+        progress_card.pack(fill="both", expand=True)
+        
+        # Barre de progression
+        progress_frame = ttk.Frame(progress_card, style="TFrame")
+        progress_frame.pack(fill="x", pady=10)
+        
+        # Étiquette pour afficher l'ETA et autres informations
+        self.keyword_progress_label = ttk.Label(
+            progress_frame, 
+            text="En attente...", 
+            background=COLORS["card"],
+            foreground=COLORS["text"],
+            font=("Segoe UI", 9)
+        )
+        self.keyword_progress_label.pack(fill="x", padx=5, pady=(0, 5), anchor="w")
+        
+        # Barre de progression
+        self.keyword_progress = ttk.Progressbar(progress_frame, orient="horizontal", length=500, mode="determinate")
+        self.keyword_progress.pack(fill="x", padx=5, pady=5)
+        
+        # Étiquette pour le pourcentage
+        self.keyword_percent_label = ttk.Label(
+            progress_frame, 
+            text="0%", 
+            background=COLORS["card"],
+            foreground=COLORS["primary_dark"],
+            font=("Segoe UI", 9, "bold")
+        )
+        self.keyword_percent_label.pack(fill="x", padx=5, pady=(0, 5), anchor="e")
+        
+        # Zone de journal
+        self.keyword_log, log_frame = self.create_log_area(progress_card)
+        log_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Ajouter le panneau de statistiques
+        self._init_stats_panel(progress_card, "keyword")
+    
+    def _browse_keyword_input(self):
+        """Ouvre une boîte de dialogue pour sélectionner le fichier d'entrée pour la recherche de mots-clés."""
+        filename = filedialog.askopenfilename(
+            initialdir=".",
+            title="Sélectionner le fichier contenant les URLs",
+            filetypes=(("Fichiers texte", "*.txt"), ("Tous les fichiers", "*.*"))
+        )
+        if filename:
+            self.keyword_input_file.set(filename)
+            self.status_bar.set_status(f"Fichier d'entrée sélectionné: {filename}")
+
+    def _start_keyword_search(self):
+        """Démarre le processus de recherche de mots-clés."""
+        # Vérification des inputs
+        input_file = self.keyword_input_file.get().strip()
+        search_terms = self.keyword_search_terms.get().strip()
+        case_sensitive = self.keyword_case_sensitive.get()
+        max_threads_str = self.keyword_max_threads.get().strip()
+        
+        if not input_file:
+            messagebox.showerror("Erreur", "Veuillez sélectionner un fichier d'entrée.")
+            return
+        
+        if not os.path.exists(input_file):
+            messagebox.showerror("Erreur", f"Le fichier {input_file} n'existe pas.")
+            return
+        
+        if not search_terms:
+            messagebox.showerror("Erreur", "Veuillez entrer au moins un mot-clé à rechercher.")
+            return
+        
+        try:
+            max_threads = int(max_threads_str)
+            if max_threads <= 0:
+                raise ValueError("Le nombre de threads doit être positif.")
+        except ValueError as e:
+            messagebox.showerror("Erreur", f"Nombre de threads invalide: {str(e)}")
+            return
+        
+        # Traiter les termes de recherche
+        keywords = []
+        # Traitement spécial pour les termes entre guillemets
+        pattern = re.compile(r'"([^"]+)"|(\S+)')
+        matches = pattern.findall(search_terms)
+        for quoted, unquoted in matches:
+            if quoted:
+                keywords.append(quoted)
+            elif unquoted:
+                keywords.append(unquoted)
+        
+        # Désactiver le bouton de démarrage pendant le traitement
+        self.keyword_start_button.config(state="disabled")
+        
+        # Réinitialiser la barre de progression et le log
+        self.keyword_progress["value"] = 0
+        self.keyword_log.delete(1.0, tk.END)
+        
+        # Ajouter des informations stylisées au log
+        self.add_log_header(self.keyword_log, "DÉMARRAGE DE LA RECHERCHE DE MOTS-CLÉS")
+        self.add_log_info(self.keyword_log, f"Fichier d'entrée: {input_file}")
+        self.add_log_info(self.keyword_log, f"Mots-clés recherchés: {', '.join(keywords)}")
+        self.add_log_info(self.keyword_log, f"Respect de la casse: {'Oui' if case_sensitive else 'Non'}")
+        self.add_log_info(self.keyword_log, f"Nombre de threads: {max_threads}")
+        self.add_log_separator(self.keyword_log)
+        self.keyword_log.see(tk.END)
+        
+        # Mettre à jour la barre de statut
+        self.status_bar.set_status(f"Recherche de mots-clés en cours pour {input_file}...")
+        
+        # Démarrer la recherche dans un thread séparé
+        self.current_process = threading.Thread(
+            target=self._run_keyword_search,
+            args=(input_file, keywords, case_sensitive, max_threads)
+        )
+        self.current_process.daemon = True
+        self.current_process.start()
+
+    def _run_keyword_search(self, input_file, keywords, case_sensitive, max_threads):
+        """Exécute la recherche de mots-clés dans un thread séparé."""
+        try:
+            # Ignorer les avertissements SSL
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            # Stocker le temps de démarrage
+            self.keyword_start_time = time.time()
+            
+            # Créer et exécuter le chercheur de mots-clés
+            searcher = KeywordSearcher(input_file, keywords, case_sensitive, max_threads=max_threads)
+            
+            # Callback pour mettre à jour la progression
+            def update_progress(current, max_val, message):
+                eta, elapsed = self._calculate_eta(current, max_val, self.keyword_start_time)
+                eta_formatted = self.format_time(eta) if eta != float('inf') else "Calcul en cours..."
+                elapsed_formatted = self.format_time(elapsed)
+                
+                enhanced_message = f"{message} | Temps écoulé: {elapsed_formatted} | ETA: {eta_formatted}"
+                self.queue.put(("keyword_progress", current, max_val, enhanced_message))
+            
+            # Exécuter la recherche
+            result = searcher.run(update_progress)
+            
+            # Mettre à jour l'interface avec le résultat
+            if result:
+                self.queue.put(("keyword_complete", result["output_file"], result["stats"]))
+            else:
+                self.queue.put(("keyword_error", "La recherche n'a pas pu être terminée correctement."))
+            
+        except Exception as e:
+            self.queue.put(("keyword_error", str(e)))
+
+    def _update_keyword_progress(self, current, max_val, status):
+        """Met à jour la barre de progression et le log de la recherche de mots-clés."""
+        # Mettre à jour la barre de progression
+        if max_val > 0:
+            percent = (current / max_val) * 100
+            self.keyword_progress["value"] = percent
+            self.keyword_percent_label.config(text=f"{percent:.1f}%")
+        else:
+            # Mode indéterminé si max_val est 0
+            self.keyword_progress["value"] = current % 100
+            self.keyword_percent_label.config(text="En cours...")
+        
+        # Mettre à jour l'étiquette de progression
+        self.keyword_progress_label.config(text=status)
+        
+        # Mettre à jour le journal
+        self.keyword_log.insert(tk.END, f"{status}\n")
+        self.keyword_log.see(tk.END)
+        
+        # Mettre à jour les statistiques si elles existent
+        if hasattr(self, 'keyword_stats_speed'):
+            # Vérifier si nous avons un temps de démarrage
+            if not hasattr(self, 'keyword_start_time'):
+                self.keyword_start_time = time.time()
+            
+            # Calcul de la vitesse (items par seconde)
+            elapsed = time.time() - self.keyword_start_time
+            if elapsed > 0:
+                speed = current / elapsed
+                self.keyword_stats_speed.set(f"{speed:.2f} URLs/sec")
+            
+            # Temps écoulé
+            self.keyword_stats_elapsed.set(self.format_time(elapsed))
+            
+            # ETA et progression
+            if max_val > 0 and current > 0:
+                items_remaining = max_val - current
+                eta = items_remaining / speed if speed > 0 else float('inf')
+                self.keyword_stats_eta.set(self.format_time(eta))
+                self.keyword_stats_progress.set(f"{current}/{max_val} ({percent:.1f}%)")
+            else:
+                self.keyword_stats_eta.set("Calcul en cours...")
+                self.keyword_stats_progress.set(f"{current}/? (?%)")
+        
+        # Mettre à jour la barre de statut
+        if max_val > 0:
+            self.status_bar.set_status(f"Recherche en cours: {current}/{max_val} URLs traitées")
+        else:
+            self.status_bar.set_status(f"Recherche en cours: {current} URLs traitées")
+
+    def _keyword_complete(self, output_file, stats):
+        """Gère la fin du processus de recherche de mots-clés."""
+        self.keyword_progress["value"] = 100
+        self.add_log_separator(self.keyword_log)
+        self.add_log_success(self.keyword_log, "Recherche terminée avec succès!")
+        
+        total_urls = stats.get("total_urls", 0)
+        total_matches = stats.get("total_matches", 0)
+        urls_with_matches = stats.get("urls_with_matches", 0)
+        
+        self.add_log_info(self.keyword_log, f"URLs traitées: {total_urls}")
+        self.add_log_info(self.keyword_log, f"URLs avec correspondances: {urls_with_matches}")
+        self.add_log_info(self.keyword_log, f"Total des correspondances: {total_matches}")
+        
+        matches_per_keyword = stats.get("matches_per_keyword", {})
+        if matches_per_keyword:
+            self.add_log_separator(self.keyword_log)
+            self.add_log_info(self.keyword_log, "Correspondances par mot-clé:")
+            for keyword, count in matches_per_keyword.items():
+                self.add_log_info(self.keyword_log, f"  '{keyword}': {count} occurrences")
+        
+        self.add_log_info(self.keyword_log, f"Les résultats ont été enregistrés dans {output_file}")
+        
+        # Ajouter des boutons pour les actions post-recherche
+        buttons_frame = ttk.Frame(self.keyword_log.master)
+        buttons_frame.pack(fill="x", pady=10)
+        
+        # Bouton pour ouvrir le dossier
+        if os.path.exists(output_file):
+            open_folder_button = ModernButton(
+                buttons_frame, 
+                text=f"📂 Ouvrir le dossier contenant les résultats", 
+                command=lambda: self._open_folder(output_file),
+                style="secondary"
+            )
+            open_folder_button.pack(side="left", padx=5, pady=5)
+        
+        # Bouton pour ouvrir le fichier directement
+        if os.path.exists(output_file):
+            open_file_button = ModernButton(
+                buttons_frame, 
+                text=f"📄 Ouvrir le fichier de résultats", 
+                command=lambda: self._open_file(output_file),
+                style="secondary"
+            )
+            open_file_button.pack(side="left", padx=5, pady=5)
+        
+        self.keyword_log.see(tk.END)
+        self.keyword_start_button.config(state="normal")
+        
+        # Mettre à jour la barre de statut
+        self.status_bar.set_status(f"Recherche terminée. {total_matches} correspondances trouvées dans {urls_with_matches} URLs.")
+        
+        # Ajouter une pop-up de confirmation
+        messagebox.showinfo("Tâche terminée", 
+            f"La recherche de mots-clés est terminée avec succès!\n\n"
+            f"Total des correspondances: {total_matches}\n"
+            f"URLs avec correspondances: {urls_with_matches}/{total_urls}\n\n"
+            f"Les résultats ont été enregistrés dans:\n{output_file}")
+
+    def _keyword_error(self, error):
+        """Gère les erreurs du processus de recherche de mots-clés."""
+        self.add_log_error(self.keyword_log, f"Une erreur est survenue: {error}")
+        self.keyword_log.see(tk.END)
+        self.keyword_start_button.config(state="normal")
+        self.status_bar.set_status("Erreur lors de la recherche de mots-clés.")
+        messagebox.showerror("Erreur de recherche", f"Une erreur est survenue:\n{error}")
 
     def _init_stats_panel(self, parent, prefix=""):
         """
@@ -1448,10 +1792,13 @@ class ModernWebScraperApp:
         # Mettre à jour la barre de statut
         self.status_bar.set_status(f"Scraping en cours pour {url}...")
         
+        # Réinitialiser l'événement stop
+        self.stop_event.clear()
+        
         # Démarrer le scraper dans un thread séparé
         self.current_process = threading.Thread(
             target=self._run_scraper,
-            args=(url, output_file, max_urls)
+            args=(url, output_file, max_urls, self.stop_event)
         )
         self.current_process.daemon = True
         self.current_process.start()
@@ -1465,8 +1812,16 @@ class ModernWebScraperApp:
         minutes, seconds = divmod(remainder, 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     
-    def _run_scraper(self, url, output_file, max_urls):
-        """Exécute le scraper dans un thread séparé."""
+    def _run_scraper(self, url, output_file, max_urls, stop_event):
+        """
+        Exécute le scraper dans un thread séparé.
+        
+        Args:
+            url (str): URL de départ pour le scraping
+            output_file (str): Fichier où enregistrer les URLs trouvées
+            max_urls (int): Nombre maximum d'URLs à scraper (None = illimité)
+            stop_event (threading.Event): Événement pour interrompre le scraping
+        """
         try:
             # Ignorer les avertissements SSL
             import urllib3
@@ -1480,22 +1835,64 @@ class ModernWebScraperApp:
             
             # Callback pour mettre à jour la progression
             def update_progress(current, max_val, message):
+                # Vérifier si l'interruption a été demandée
+                if stop_event.is_set():
+                    return True  # Signaler l'interruption
+                    
                 eta, elapsed = self._calculate_eta(current, max_val, self.scraper_start_time)
                 eta_formatted = self.format_time(eta) if eta != float('inf') else "Calcul en cours..."
                 elapsed_formatted = self.format_time(elapsed)
                 
                 enhanced_message = f"{message} | Temps écoulé: {elapsed_formatted} | ETA: {eta_formatted}"
                 self.queue.put(("scraper_progress", current, max_val, enhanced_message))
+                
+                return False  # Ne pas interrompre
+            
+            # Modifier la méthode scrape pour vérifier périodiquement stop_event
+            original_scrape = scraper.scrape
+            
+            def wrapped_scrape(progress_callback):
+                # Stocker le stop_event dans le scraper
+                scraper.stop_requested = False
+                
+                # Vérifier périodiquement si stop_event est actif
+                def check_stop():
+                    if stop_event.is_set():
+                        scraper.stop_requested = True
+                        return True
+                    return False
+                
+                # Appeler la fonction originale
+                return original_scrape(progress_callback)
+            
+            # Remplacer temporairement la méthode
+            scraper.scrape = wrapped_scrape
             
             # Exécuter le scraping
             urls = scraper.scrape(update_progress)
             
-            # Mettre à jour l'interface avec le résultat
-            self.queue.put(("scraper_complete", len(urls), output_file))
+            # Si l'interruption a été demandée
+            if stop_event.is_set():
+                self.queue.put(("scraper_interrupted", len(scraper.found_urls), output_file))
+            else:
+                # Mettre à jour l'interface avec le résultat
+                self.queue.put(("scraper_complete", len(urls), output_file))
             
         except Exception as e:
             self.queue.put(("scraper_error", str(e)))
-    
+
+    def _scraper_interrupted(self, url_count, output_file):
+        """Gère l'interruption du processus de scraping."""
+        self.add_log_warning(self.scraper_log, "Scraping interrompu par l'utilisateur")
+        self.add_log_info(self.scraper_log, f"Nombre d'URLs trouvées avant interruption: {url_count}")
+        self.add_log_info(self.scraper_log, f"Les URLs ont été enregistrées dans {output_file}")
+        
+        self.scraper_log.see(tk.END)
+        self.scraper_start_button.config(state="normal")
+        
+        # Mettre à jour la barre de statut
+        self.status_bar.set_status(f"Scraping interrompu. {url_count} URLs trouvées.")
+
     def _start_date_extractor(self):
         """Démarre le processus d'extraction des dates."""
         # Vérification des inputs
@@ -1831,7 +2228,7 @@ class ModernWebScraperApp:
             pass
         
         # Planifier la prochaine vérification avec un délai plus court pour plus de réactivité
-        self.root.after(50, self._check_queue)  # Réduit de 100ms à 50ms
+        self.root.after(100, self._check_queue)
         
     def _calculate_eta(self, current, max_val, start_time):
         """
@@ -1935,6 +2332,9 @@ class ModernWebScraperApp:
         
         # Mettre à jour la barre de statut
         self.status_bar.set_status(f"Scraping terminé. {url_count} URLs trouvées.")
+        
+        # Ajouter une pop-up de confirmation
+        messagebox.showinfo("Tâche terminée", f"Le scraping est terminé avec succès!\n\n{url_count} URLs ont été trouvées et enregistrées dans:\n{output_file}")
         
         # Proposer de passer à l'extraction des dates
         if messagebox.askyesno("Continuer", "Voulez-vous passer à l'extraction des dates?"):
@@ -2075,6 +2475,16 @@ class ModernWebScraperApp:
         # Mettre à jour la barre de statut
         self.status_bar.set_status("Organisation terminée.")
         
+        # Ajouter une pop-up de confirmation
+        folder_name = stats.get("folder_name", "dossier d'organisation")
+        output_dir = os.path.dirname(self.organizer_input_file.get().strip())
+        full_path = os.path.join(output_dir, folder_name)
+        
+        messagebox.showinfo("Tâche terminée", 
+            f"L'organisation des URLs par date est terminée!\n\n"
+            f"URLs avec date: {stats.get('urls_with_dates', 0)}/{stats.get('total_urls', 0)}\n"
+            f"Dossier créé: {full_path}")
+        
         # Proposer de passer à l'exportation
         if messagebox.askyesno("Continuer", "Voulez-vous passer à l'exportation CSV des URLs organisées?"):
             if stats and "folder_name" in stats:
@@ -2117,6 +2527,8 @@ class ModernWebScraperApp:
         self.exporter_progress["value"] = 100
         self.add_log_separator(self.exporter_log)
         
+        message_popup = ""
+        
         if result:
             self.add_log_success(self.exporter_log, "Exportation terminée avec succès!")
             
@@ -2140,10 +2552,18 @@ class ModernWebScraperApp:
             
             self.add_log_info(self.exporter_log, f"Total d'URLs exportées: {total_urls}")
             
+            message_popup = f"L'exportation est terminée avec succès!\n\nTotal d'URLs exportées: {total_urls}\n"
+            
             if years_data:
                 self.add_log_info(self.exporter_log, "\nURLs par année:")
+                message_popup += "\nURLs par année:\n"
                 for year, count in years_data.items():
                     self.add_log_info(self.exporter_log, f"  {year}: {count} URLs")
+                    message_popup += f"  {year}: {count} URLs\n"
+            
+            message_popup += "\nFichiers créés:\n"
+            for file_path in output_files:
+                message_popup += f"- {file_path}\n"
             
             # Ajouter les boutons pour ouvrir les dossiers
             buttons_frame = ttk.Frame(self.exporter_log.master)
@@ -2160,6 +2580,7 @@ class ModernWebScraperApp:
                     open_button.pack(pady=5)
         else:
             self.add_log_warning(self.exporter_log, "L'exportation n'a pas pu être complétée.")
+            message_popup = "L'exportation n'a pas pu être complétée."
         
         self.exporter_log.see(tk.END)
         self.exporter_start_button.config(state="normal")
@@ -2205,9 +2626,51 @@ class ModernWebScraperApp:
         """Gère la fermeture propre de l'application."""
         if self.current_process and self.current_process.is_alive():
             if messagebox.askyesno("Quitter", "Un processus est en cours. Voulez-vous vraiment quitter?"):
-                self.root.destroy()
+                # Signaler à tous les threads de s'arrêter
+                self.stop_event.set()
+                
+                # Attendre un peu pour laisser le temps aux threads de s'arrêter
+                self.root.after(100, self.root.destroy)
+            else:
+                # L'utilisateur a annulé la fermeture
+                pass
         else:
             self.root.destroy()
+            
+    def _date_complete(self, dates_found, total_urls, output_file):
+        """Gère la fin du processus d'extraction des dates."""
+        self.date_progress["value"] = 100
+        self.add_log_separator(self.date_log)
+        self.add_log_success(self.date_log, "Extraction des dates terminée avec succès!")
+        self.add_log_info(self.date_log, f"URLs avec dates trouvées: {dates_found}/{total_urls}")
+        self.add_log_info(self.date_log, f"Les résultats ont été enregistrés dans {output_file}")
+        
+        # Ajouter un bouton pour ouvrir le dossier
+        if os.path.exists(output_file):
+            buttons_frame = ttk.Frame(self.date_log.master)
+            buttons_frame.pack(fill="x", pady=10)
+            
+            open_button = ModernButton(
+                buttons_frame, 
+                text=f"📂 Ouvrir le dossier contenant {os.path.basename(output_file)}", 
+                command=lambda: self._open_folder(output_file),
+                style="secondary"
+            )
+            open_button.pack(pady=5)
+        
+        self.date_log.see(tk.END)
+        self.date_start_button.config(state="normal")
+        
+        # Mettre à jour la barre de statut
+        self.status_bar.set_status(f"Extraction terminée. {dates_found}/{total_urls} URLs avec dates.")
+        
+        # Ajouter une pop-up de confirmation
+        messagebox.showinfo("Tâche terminée", f"L'extraction des dates est terminée!\n\nDates trouvées: {dates_found}/{total_urls}\nLes résultats ont été enregistrés dans:\n{output_file}")
+        
+        # Proposer de passer à l'organisation
+        if messagebox.askyesno("Continuer", "Voulez-vous passer à l'organisation des URLs par date?"):
+            self.organizer_input_file.set(output_file)
+            self.notebook.select(2)  # Passer à l'onglet d'organisation
 
 
 def main():
