@@ -42,3 +42,7 @@ htmlcov/
 # Fichiers spécifiques à l'application
 scraper.log
 date_extractor.log
+
+# Fichiers texte et csv
+*.txt
+*.csv
