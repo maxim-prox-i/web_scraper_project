@@ -43,6 +43,6 @@ htmlcov/
 scraper.log
 date_extractor.log
 
-# Fichiers texte et csv
+# Fichiers texte et csv même à la racine du projet
 *.txt
 *.csv
