@@ -30,7 +30,7 @@ class KeywordSearcher:
             max_threads (int, optional): Nombre maximum de threads à utiliser
         """
         self.input_file = input_file
-        self.keywords = keywords
+        self.keywords = keywords if isinstance(keywords, list) else [keywords]
         self.case_sensitive = case_sensitive
         self.max_threads = max_threads
         

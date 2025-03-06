@@ -646,11 +646,11 @@ class ModernWebScraperApp:
         # Option pour la casse
         case_frame = ttk.Frame(params_card, style="Field.TFrame")
         case_frame.pack(fill="x", pady=10)
-        
+
         case_label = ttk.Label(case_frame, text="Respecter la casse:", style="Normal.TLabel", width=25, anchor="w")
         case_label.pack(side="left", padx=(0, 10))
-        
-        case_check = ttk.Checkbutton(case_frame, variable=self.keyword_case_sensitive, style="TCheckbutton")
+
+        case_check = ttk.Checkbutton(case_frame, variable=self.keywords_case_sensitive, style="TCheckbutton")
         case_check.pack(side="left")
         ToolTip(case_check, "Si coché, la recherche respectera les majuscules/minuscules")
         
@@ -1278,6 +1278,8 @@ class ModernWebScraperApp:
         self.keywords_input_file = tk.StringVar(value="")
         self.keywords_output_file = tk.StringVar(value="")
         self.keywords_search_terms = tk.StringVar(value="")
+        # Ajouter cette ligne qui manque :
+        self.keywords_case_sensitive = tk.BooleanVar(value=False)
         self.keywords_max_threads = tk.StringVar(value="10")
         
         # Conteneur principal
@@ -1473,11 +1475,11 @@ class ModernWebScraperApp:
             self.keywords_start_time = time.time()
             
             # Créer et exécuter le chercheur
-            searcher = KeywordSearcher(input_file, output_file, max_threads)
+            # Utiliser l'attribut case_sensitive correctement ici
+            case_sensitive = self.keywords_case_sensitive.get()
             
-            # Définir les mots clés
-            num_keywords = searcher.set_keywords(keywords)
-            self.add_log_info(self.keywords_log, f"{num_keywords} mots clés définis pour la recherche")
+            keywords_list = [k.strip() for k in keywords.split(',') if k.strip()]
+            searcher = KeywordSearcher(input_file, keywords_list, case_sensitive, max_threads=max_threads)
             
             # Callback pour mettre à jour la progression
             def update_progress(current, max_val, message):
@@ -1489,10 +1491,13 @@ class ModernWebScraperApp:
                 self.queue.put(("keywords_progress", current, max_val, enhanced_message))
             
             # Exécuter la recherche
-            keywords_found, total_urls, output_file = searcher.run(update_progress)
+            result = searcher.run(update_progress)
             
             # Mettre à jour l'interface avec le résultat
-            self.queue.put(("keywords_complete", keywords_found, total_urls, output_file))
+            if result:
+                self.queue.put(("keywords_complete", result["stats"]["urls_with_matches"], result["stats"]["total_urls"], result["output_file"]))
+            else:
+                self.queue.put(("keywords_error", "La recherche n'a pas pu être terminée correctement."))
             
         except Exception as e:
             self.queue.put(("keywords_error", str(e)))
@@ -1808,6 +1813,9 @@ class ModernWebScraperApp:
         if seconds == float('inf'):
             return "Inconnu"
         
+        if seconds < 0:
+            return "00:00:00"
+            
         hours, remainder = divmod(int(seconds), 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
@@ -2242,17 +2250,27 @@ class ModernWebScraperApp:
         Returns:
             tuple: (temps restant en secondes, temps écoulé en secondes)
         """
-        if current <= 0:
-            return float('inf'), 0
-        
+        # Calculer le temps écoulé
         elapsed = time.time() - start_time
+        
+        # Si aucun élément n'a été traité, on ne peut pas estimer l'ETA
+        if current <= 0:
+            return float('inf'), elapsed
+        
+        # Calculer la vitesse (éléments par seconde)
         items_per_second = current / elapsed if elapsed > 0 else 0
+        
+        # Cas où max_val n'est pas défini (0 ou négatif) ou current a déjà dépassé max_val
+        if max_val <= 0 or current >= max_val:
+            return 0, elapsed  # ETA est 0, on est déjà terminé
+        
+        # Calculer les éléments restants et l'ETA
         remaining_items = max_val - current
         
         if items_per_second > 0:
             eta = remaining_items / items_per_second
         else:
-            eta = float('inf')
+            eta = float('inf')  # Impossible d'estimer si la vitesse est nulle
         
         return eta, elapsed
     
@@ -2260,7 +2278,7 @@ class ModernWebScraperApp:
         """Met à jour la barre de progression et le log du scraper."""
         # Mettre à jour la barre de progression
         if max_val > 0:
-            percent = (current / max_val) * 100
+            percent = min(100, (current / max_val) * 100)  # Limiter à 100%
             self.scraper_progress["value"] = percent
             self.scraper_percent_label.config(text=f"{percent:.1f}%")
         else:
@@ -2281,20 +2299,28 @@ class ModernWebScraperApp:
             if not hasattr(self, 'scraper_start_time'):
                 self.scraper_start_time = time.time()
             
-            # Calcul de la vitesse (items par seconde)
-            elapsed = time.time() - self.scraper_start_time
+            # Calcul de la vitesse et du temps
+            eta, elapsed = self._calculate_eta(current, max_val, self.scraper_start_time)
+            
+            # Mise à jour des statistiques
             if elapsed > 0:
                 speed = current / elapsed
                 self.scraper_stats_speed.set(f"{speed:.2f} URLs/sec")
+            else:
+                self.scraper_stats_speed.set("0.00 URLs/sec")
             
             # Temps écoulé
             self.scraper_stats_elapsed.set(self.format_time(elapsed))
             
             # ETA et progression
-            if max_val > 0 and current > 0:
-                items_remaining = max_val - current
-                eta = items_remaining / speed if speed > 0 else float('inf')
-                self.scraper_stats_eta.set(self.format_time(eta))
+            if max_val > 0:
+                if current >= max_val:
+                    self.scraper_stats_eta.set("Terminé")
+                    percent = 100
+                else:
+                    self.scraper_stats_eta.set(self.format_time(eta))
+                    percent = min(100, (current / max_val) * 100)
+                    
                 self.scraper_stats_progress.set(f"{current}/{max_val} ({percent:.1f}%)")
             else:
                 self.scraper_stats_eta.set("Calcul en cours...")
@@ -2353,26 +2379,7 @@ class ModernWebScraperApp:
         """Met à jour la barre de progression et le log de l'extracteur de dates."""
         # Mettre à jour la barre de progression
         if max_val > 0:
-            self.date_progress["value"] = (current / max_val) * 100
-        else:
-            # Mode indéterminé si max_val est 0
-            self.date_progress["value"] = current
-        
-        # Mettre à jour le journal
-        self.date_log.insert(tk.END, f"{status}\n")
-        self.date_log.see(tk.END)
-        
-        # Mettre à jour la barre de statut
-        if max_val > 0:
-            self.status_bar.set_status(f"Extraction en cours: {current}/{max_val} URLs traitées")
-        else:
-            self.status_bar.set_status(f"Extraction en cours: {current} URLs traitées")
-    
-    def _update_date_progress(self, current, max_val, status):
-        """Met à jour la barre de progression et le log de l'extracteur de dates."""
-        # Mettre à jour la barre de progression
-        if max_val > 0:
-            percent = (current / max_val) * 100
+            percent = min(100, (current / max_val) * 100)  # Limiter à 100%
             self.date_progress["value"] = percent
             self.date_percent_label.config(text=f"{percent:.1f}%")
         else:
@@ -2393,20 +2400,28 @@ class ModernWebScraperApp:
             if not hasattr(self, 'date_start_time'):
                 self.date_start_time = time.time()
             
-            # Calcul de la vitesse (items par seconde)
-            elapsed = time.time() - self.date_start_time
+            # Calcul de la vitesse et du temps
+            eta, elapsed = self._calculate_eta(current, max_val, self.date_start_time)
+            
+            # Mise à jour des statistiques
             if elapsed > 0:
                 speed = current / elapsed
                 self.date_stats_speed.set(f"{speed:.2f} URLs/sec")
+            else:
+                self.date_stats_speed.set("0.00 URLs/sec")
             
             # Temps écoulé
             self.date_stats_elapsed.set(self.format_time(elapsed))
             
             # ETA et progression
-            if max_val > 0 and current > 0:
-                items_remaining = max_val - current
-                eta = items_remaining / speed if speed > 0 else float('inf')
-                self.date_stats_eta.set(self.format_time(eta))
+            if max_val > 0:
+                if current >= max_val:
+                    self.date_stats_eta.set("Terminé")
+                    percent = 100
+                else:
+                    self.date_stats_eta.set(self.format_time(eta))
+                    percent = min(100, (current / max_val) * 100)
+                    
                 self.date_stats_progress.set(f"{current}/{max_val} ({percent:.1f}%)")
             else:
                 self.date_stats_eta.set("Calcul en cours...")

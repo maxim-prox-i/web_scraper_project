@@ -55,3 +55,36 @@ def get_random_headers():
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
         }
+def extract_domain(url):
+    """Extrait le nom de domaine d'une URL"""
+    # Supprimer le protocole (http://, https://, etc.)
+    domain = re.sub(r'^https?://', '', url)
+    # Supprimer tout ce qui suit le premier slash
+    domain = domain.split('/', 1)[0]
+    # Supprimer tout paramètre ou port
+    domain = domain.split('?', 1)[0].split(':', 1)[0]
+    return domain
+
+def ensure_data_directory(domain=None):
+    """
+    Assure que le répertoire data et le sous-répertoire du domaine existent
+    
+    Args:
+        domain (str, optional): Nom de domaine pour lequel créer un sous-répertoire
+        
+    Returns:
+        str: Chemin du répertoire créé
+    """
+    # Créer le répertoire data s'il n'existe pas
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    
+    # Si un domaine est spécifié, créer son sous-répertoire
+    if domain:
+        domain_dir = os.path.join(data_dir, sanitize_filename(domain))
+        if not os.path.exists(domain_dir):
+            os.makedirs(domain_dir)
+        return domain_dir
+    
+    return data_dir
