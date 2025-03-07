@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dateutil.parser import parse as parse_date
 from fake_useragent import UserAgent
 from tqdm import tqdm
+from utils.common_utils import extract_domain, ensure_data_directory
 
 
 class DateExtractor:
@@ -26,74 +27,80 @@ class DateExtractor:
         
         Args:
             input_file (str): Fichier contenant les URLs à traiter
-            output_file (str, optional): Fichier de sortie pour les résultats
+            output_file (str, optional): Fichier CSV où enregistrer les résultats
             max_threads (int, optional): Nombre maximum de threads à utiliser
         """
         self.input_file = input_file
-        self.output_file = output_file or f"{os.path.splitext(input_file)[0]}-dates.csv"
+        
+        # Déterminer le domaine à partir du nom du fichier ou du contenu
+        self.domain = None
+        parent_dir = os.path.basename(os.path.dirname(os.path.abspath(input_file)))
+        if parent_dir != "data" and not parent_dir.startswith('.'):
+            self.domain = parent_dir
+        
+        if not self.domain:
+            # Essayer de déterminer le domaine à partir de la première URL du fichier
+            try:
+                with open(input_file, 'r', encoding='utf-8') as f:
+                    first_url = f.readline().strip()
+                    if first_url:
+                        self.domain = extract_domain(first_url)
+            except:
+                self.domain = "unknown_domain"
+        
+        self.domain_dir = ensure_data_directory(self.domain)
+        
+        # Définir le fichier de sortie
+        if output_file:
+            if os.path.isabs(output_file):
+                self.output_file = output_file
+            else:
+                self.output_file = os.path.join(self.domain_dir, output_file)
+        else:
+            base_name = os.path.splitext(os.path.basename(input_file))[0]
+            self.output_file = os.path.join(self.domain_dir, f"{base_name}-dates.csv")
+        
         self.max_threads = max_threads
-        
-        # Threads et synchronisation
-        self.lock = threading.RLock()
-        self.session_pool = []
-        for _ in range(max_threads):
-            session = requests.Session()
-            self.session_pool.append(session)
-        
-        self.session_lock = threading.Lock()
-        self.session_index = 0
-        
-        # Date patterns
-        self.date_patterns = [
-            # Formats ISO et similaires
-            r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}',  # ISO 8601
-            r'\d{4}-\d{2}-\d{2}',                    # YYYY-MM-DD
-            r'\d{2}/\d{2}/\d{4}',                    # MM/DD/YYYY ou DD/MM/YYYY
-            r'\d{2}\.\d{2}\.\d{4}',                  # DD.MM.YYYY
-            r'\d{2}-\d{2}-\d{4}',                    # DD-MM-YYYY ou MM-DD-YYYY
-            
-            # Formats pour certains attributs HTML
-            r'publishedDate[\"\']\?\s*:\s*[\"\']\?([^\"\']+)[\"\']\?',
-            r'datePublished[\"\']\?\s*:\s*[\"\']\?([^\"\']+)[\"\']\?',
-            r'dateCreated[\"\']\?\s*:\s*[\"\']\?([^\"\']+)[\"\']\?',
-            r'date[\"\']\?\s*:\s*[\"\']\?([^\"\']+)[\"\']\?',
-        ]
-        
-        self.date_patterns_compiled = [re.compile(pattern) for pattern in self.date_patterns]
-        self.url_date_patterns_compiled = [
-            re.compile(r'/(\d{4}/\d{1,2}/\d{1,2})/'),
-            re.compile(r'/(\d{4}-\d{1,2}-\d{1,2})/'),
-            re.compile(r'/(\d{4}/\d{1,2})/'),
-            re.compile(r'(\d{4}-\d{2}-\d{2})')
-        ]
-        
-        # Attributs HTML et meta tags pour les dates
-        self.date_attributes = [
-            'datetime', 'pubdate', 'date', 'published', 'published_time',
-            'article:published_time', 'datePublished', 'datepublished',
-            'datecreated', 'date-created', 'article:published',
-            'og:published_time', 'release_date', 'date_published',
-            'created', 'modified'
-        ]
-        
-        # Noms des mois en français
-        self.french_months = {
-            'janvier': 'January', 'fevrier': 'February', 'février': 'February',
-            'mars': 'March', 'avril': 'April', 'mai': 'May',
-            'juin': 'June', 'juillet': 'July', 'aout': 'August', 'août': 'August',
-            'septembre': 'September', 'octobre': 'October',
-            'novembre': 'November', 'decembre': 'December', 'décembre': 'December'
-        }
-        
-        # Résultats
+        self.urls = []
         self.results = []
-        self.results_lock = threading.Lock()
-        
-        # Barre de progression
-        self.pbar = None
-        
-        # Configuration du logger
+        self.lock = threading.Lock()
         self.logger = self._setup_logger()
+        
+        # Chargement des modèles de date
+        self.date_patterns = [
+            # Formats explicites communs
+            r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})',  # YYYY-MM-DD or YYYY/MM/DD
+            r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})',  # DD-MM-YYYY or DD/MM/YYYY
+            r'(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})',  # DD Month YYYY (français)
+            r'(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})',  # DD Mon YYYY (anglais abrégé)
+            r'(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})',  # DD Month YYYY (anglais)
+            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})',  # Month DD, YYYY (anglais)
+            r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})',  # Mon DD, YYYY (anglais abrégé)
+            r'(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{1,2}),?\s+(\d{4})',  # Month DD YYYY (français)
+            
+            # Formats ISO et autres formats techniques
+            r'(\d{4})(\d{2})(\d{2})',  # YYYYMMDD
+            r'(\d{4})[/-](\d{2})[/-](\d{2})T\d{2}:\d{2}',  # YYYY-MM-DDThh:mm (ISO 8601)
+            r'(\d{4})[/-](\d{2})[/-](\d{2})T\d{2}:\d{2}:\d{2}',  # YYYY-MM-DDThh:mm:ss (ISO 8601)
+            
+            # Formats avec jour de la semaine
+            r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})',  # Weekday, DD Month YYYY (anglais)
+            r'(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})',  # Abbreviated Weekday, DD Mon YYYY (anglais)
+            r'(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche),?\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})',  # Weekday DD Month YYYY (français)
+        ]
+        
+        # Mapping des mois en français et anglais vers leur numéro
+        self.month_map = {
+            # Français
+            'janvier': '01', 'février': '02', 'mars': '03', 'avril': '04', 'mai': '05', 'juin': '06',
+            'juillet': '07', 'août': '08', 'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12',
+            # Anglais 
+            'january': '01', 'february': '02', 'march': '03', 'april': '04', 'may': '05', 'june': '06',
+            'july': '07', 'august': '08', 'september': '09', 'october': '10', 'november': '11', 'december': '12',
+            # Abréviation anglais
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'jun': '06',
+            'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+        }
     
     def __del__(self):
         """Ferme les sessions HTTP lorsque l'objet est détruit"""

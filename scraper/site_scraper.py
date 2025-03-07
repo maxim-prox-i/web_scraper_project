@@ -1,63 +1,64 @@
 """
 Module contenant la classe SiteScraper pour explorer et récupérer les URLs d'un site web.
 """
-import os
-import re
-import time
-import random
-import requests
+import os, re, time, random, requests, sys
+import queue  # Ajoutez cette ligne
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, unquote
 from collections import deque
 import xml.etree.ElementTree as ET
 import logging
+from utils.common_utils import extract_domain, ensure_data_directory
 
 
 class SiteScraper:
-    def __init__(self, start_url, output_file='urls.txt', max_urls=None):
+    def __init__(self, url, output_file=None, max_urls=None):
         """
         Initialise le scraper de site web.
         
         Args:
-            start_url (str): URL de départ pour le scraping
+            url (str): URL de départ pour le scraping
             output_file (str, optional): Fichier où enregistrer les URLs trouvées
             max_urls (int, optional): Nombre maximum d'URLs à scraper (None = illimité)
         """
-        self.start_url = start_url
-        self.output_file = output_file
-        self.max_urls = max_urls  # Nombre maximum d'URLs à scraper (None = illimité)
+        self.start_url = url
+        self.domain = extract_domain(url)
+        self.domain_dir = ensure_data_directory(self.domain)
         
-        # Extraire le domaine de base
-        parsed_url = urlparse(start_url)
+        # Extraire la base URL
+        parsed_url = urlparse(url)
+        self.base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
         self.base_domain = parsed_url.netloc
-        self.base_url = f"{parsed_url.scheme}://{self.base_domain}"
         
-        self.session = requests.Session()
-        self.visited = set()  # URLs déjà visitées
-        self.found_urls = set()  # Toutes les URLs trouvées
-        self.queue = deque([start_url])  # File d'attente pour le BFS
+        # Initialiser un logger
+        self.logger = logging.getLogger('site_scraper')
         
-        # Fichiers à ignorer
-        self.ignored_extensions = {
-            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.tif', '.tiff',
-            '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.odt', '.ods', '.odp',
-            '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.wav', '.ogg', '.webm',
-            '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
-            '.css', '.js', '.json', '.xml', '.rss'
-        }
+        # Définir le fichier de sortie
+        if output_file:
+            if os.path.isabs(output_file):
+                self.output_file = output_file
+            else:
+                self.output_file = os.path.join(self.domain_dir, output_file)
+        else:
+            self.output_file = os.path.join(self.domain_dir, "urls.txt")
         
-        # Proxy rotator (à configurer si nécessaire)
+        self.max_urls = max_urls
+        self.found_urls = set()
+        self.visited_urls = set()
+        self.url_queue = queue.Queue()
+        self.stop_requested = False
+        
+        # Ajouter l'URL de départ à la file d'attente
+        self.url_queue.put(self.start_url)
+        
+        # Patterns regex pour filtrer les URLs
+        self.invalid_extensions = re.compile(r'\.(jpg|jpeg|png|gif|bmp|svg|webp|css|js|pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|tar|gz|mp3|mp4|avi|mov|wmv|flv|ogg|webm|ico|xml|json)$', re.IGNORECASE)
+        
+        # Pour les proxy et autres configurations
         self.proxies = []
-        
-        # Configuration du logger
-        self.logger = self._setup_logger()
-        
-        # Désactiver les avertissements SSL
-        requests.packages.urllib3.disable_warnings(
-            requests.packages.urllib3.exceptions.InsecureRequestWarning
-        )
-        
-        self.normalize_cache = {}  # Cache pour les URLs normalisées
+        self.session = requests.Session()
+        self.normalize_cache = {}
+        self.ignored_extensions = ['jpg', 'jpeg', 'png', 'gif', 'css', 'js', 'pdf']
         
     def __del__(self):
         """Ferme les sessions HTTP lorsque l'objet est détruit"""
@@ -221,20 +222,20 @@ class SiteScraper:
     
     def save_url(self, url):
         """Enregistre une URL dans le fichier de sortie"""
-        # Vérifier si on a atteint le nombre maximum d'URLs avant d'ajouter
-        if self.max_urls and len(self.found_urls) >= self.max_urls:
-            self.logger.info(f"Nombre maximum d'URLs atteint ({self.max_urls}). Arrêt du scraping.")
-            return True
-            
+        # Vérifier si l'URL n'est pas déjà dans l'ensemble des URLs trouvées
+        if url in self.found_urls:
+            return False
+        
+        # Ajouter l'URL au fichier et à l'ensemble
         with open(self.output_file, 'a', encoding='utf-8') as f:
             f.write(url + '\n')
         
         self.found_urls.add(url)
-        self.logger.info(f"URL sauvegardée ({len(self.found_urls)}/{self.max_urls if self.max_urls else 'illimité'}): {url}")
+        # Log explicitant l'enregistrement
+        self.logger.info(f"URL #{len(self.found_urls)} sauvegardée: {url}")
         
-        # Vérifier à nouveau après l'ajout
+        # Vérifier si on a atteint le nombre maximum d'URLs
         if self.max_urls and len(self.found_urls) >= self.max_urls:
-            self.logger.info(f"Nombre maximum d'URLs atteint ({self.max_urls}). Arrêt du scraping.")
             return True
         return False
     
@@ -511,19 +512,26 @@ class SiteScraper:
             if self.stop_requested:
                 self.logger.info("Interruption du scraping demandée")
                 break
-                
+                        
             normalized_url = self.normalize_url(url)
             if normalized_url not in self.found_urls:
+                # Mise à jour de progression pour montrer clairement l'enregistrement
+                if progress_callback:
+                    should_stop = progress_callback(len(self.found_urls), self.max_urls or len(sitemap_urls), 
+                                        f"Enregistrement de l'URL #{len(self.found_urls)+1}: {normalized_url[:50]}...")
+                    if should_stop:
+                        break
+                        
                 if self.save_url(normalized_url):
                     limit_reached = True
                     break
-                self.queue.append(normalized_url)
+                self.url_queue.put(normalized_url)
         
         # Exécuter le BFS si la limite n'est pas atteinte
         last_progress_update = time.time()
         progress_update_interval = 0.5  # Réduire les mises à jour de progression
         
-        while self.queue and not limit_reached:
+        while not self.url_queue.empty() and not limit_reached:
             # Vérifier si une interruption a été demandée
             if self.stop_requested:
                 self.logger.info("Interruption du scraping demandée")
@@ -542,27 +550,27 @@ class SiteScraper:
                 status_message = f"URLs trouvées: {len(self.found_urls)}"
                 if self.max_urls:
                     should_stop = progress_callback(len(self.found_urls), self.max_urls, 
-                                    f"{status_message}/{self.max_urls}, Visitées: {len(self.visited)}, En file: {len(self.queue)}")
+                                    f"{status_message}/{self.max_urls}, Visitées: {len(self.visited_urls)}, En file: {self.url_queue.qsize()}")
                 else:
                     should_stop = progress_callback(len(self.found_urls), 0, 
-                                    f"{status_message}, Visitées: {len(self.visited)}, En file: {len(self.queue)}")
+                                    f"{status_message}, Visitées: {len(self.visited_urls)}, En file: {self.url_queue.qsize()}")
                 
                 if should_stop:
                     self.logger.info("Interruption du scraping demandée via callback")
                     break
                 
-            current_url = self.queue.popleft()
+            current_url = self.url_queue.get()
             
             # Vérifier si l'URL a déjà été visitée
-            if current_url in self.visited:
+            if current_url in self.visited_urls:
                 continue
             
             # Marquer l'URL comme visitée
-            self.visited.add(current_url)
+            self.visited_urls.add(current_url)
             
             # Afficher la progression (moins fréquemment)
-            if len(self.visited) % 50 == 0:  # Réduit de 10 à 50
-                self.logger.info(f"Progression: {len(self.found_urls)}/{self.max_urls if self.max_urls else 'illimité'} URLs trouvées, {len(self.visited)} visitées, {len(self.queue)} en attente")
+            if len(self.visited_urls) % 50 == 0:  # Réduit de 10 à 50
+                self.logger.info(f"Progression: {len(self.found_urls)}/{self.max_urls if self.max_urls else 'illimité'} URLs trouvées, {len(self.visited_urls)} visitées, {self.url_queue.qsize()} en attente")
             
             # Délai aléatoire entre les requêtes (réduit pour plus de rapidité)
             time.sleep(random.uniform(0.1, 0.3))  # Réduit de 0.2-0.5 à 0.1-0.3
@@ -575,6 +583,13 @@ class SiteScraper:
             # Vérifier si l'URL doit être sauvegardée
             normalized_url = self.normalize_url(current_url)
             if normalized_url not in self.found_urls:
+                # Mise à jour de progression pour l'enregistrement
+                if progress_callback:
+                    should_stop = progress_callback(len(self.found_urls), self.max_urls or 0, 
+                                        f"Enregistrement de l'URL #{len(self.found_urls)+1}: {normalized_url[:50]}...")
+                    if should_stop:
+                        break
+                                
                 # Vérifier si on a atteint le nombre maximum d'URLs
                 if self.save_url(normalized_url):
                     self.logger.info("Limite d'URLs atteinte. Arrêt du scraping.")
@@ -600,11 +615,15 @@ class SiteScraper:
             # Filtrer et ajouter les nouvelles URLs à la queue
             for url in new_urls:
                 normalized_url = self.normalize_url(url)
-                if self.is_valid_url(normalized_url) and normalized_url not in self.visited and normalized_url not in self.queue:
+                if self.is_valid_url(normalized_url) and normalized_url not in self.visited_urls:
                     new_valid_urls.append(normalized_url)
             
             # Ajouter les URLs en une seule fois pour réduire les opérations sur la queue
-            self.queue.extend(new_valid_urls)
+            for url in new_valid_urls:
+                normalized_url = self.normalize_url(url)
+                # Ne pas ajouter à la file si déjà dans les URLs trouvées ou visitées
+                if normalized_url not in self.found_urls and normalized_url not in self.visited_urls:
+                    self.url_queue.put(normalized_url)
             
             # Vérifier si on a atteint la limite d'URLs
             if self.max_urls and len(self.found_urls) >= self.max_urls:

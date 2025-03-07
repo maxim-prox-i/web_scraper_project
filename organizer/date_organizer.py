@@ -7,7 +7,11 @@ import re
 import time
 import datetime
 import json
+import sys
+# Ajouter le répertoire racine du projet au chemin Python
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tqdm import tqdm
+from utils.common_utils import ensure_data_directory, extract_domain
 
 
 class URLDateOrganizer:
@@ -21,14 +25,31 @@ class URLDateOrganizer:
             folder_name (str, optional): Nom du dossier principal pour les données organisées
         """
         self.input_file = input_file
+        
+        # Déterminer le domaine à partir du nom du fichier ou du contenu
+        parent_dir = os.path.basename(os.path.dirname(os.path.abspath(input_file)))
+        if parent_dir != "data" and not parent_dir.startswith('.'):
+            self.domain = parent_dir
+        else:
+            # Essayer de déterminer le domaine à partir des URLs du fichier CSV
+            self.domain = "unknown_domain"
+            try:
+                with open(input_file, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    first_row = next(reader, None)
+                    if first_row and 'url' in first_row:
+                        self.domain = extract_domain(first_row['url'])
+            except:
+                pass
+        
         self.folder_name = self.sanitize_filename(folder_name) if folder_name else "urls_organisees"
         
         # Définir le répertoire de sortie
         if output_dir:
             self.output_dir = os.path.join(output_dir, self.folder_name)
         else:
-            parent_dir = os.path.dirname(os.path.abspath(input_file))
-            self.output_dir = os.path.join(parent_dir, self.folder_name)
+            domain_dir = ensure_data_directory(self.domain)
+            self.output_dir = os.path.join(domain_dir, self.folder_name)
         
         # Pour stocker les statistiques
         self.stats = {

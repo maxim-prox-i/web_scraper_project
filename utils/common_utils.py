@@ -1,7 +1,7 @@
 """
 Utilitaires communs utilisés dans différents modules du projet.
 """
-import re
+import re, os
 import time
 import random
 from fake_useragent import UserAgent
@@ -55,6 +55,7 @@ def get_random_headers():
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
         }
+
 def extract_domain(url):
     """Extrait le nom de domaine d'une URL"""
     # Supprimer le protocole (http://, https://, etc.)

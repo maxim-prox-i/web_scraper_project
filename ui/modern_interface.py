@@ -955,7 +955,7 @@ class ModernWebScraperApp:
         stats_frame = ttk.Frame(parent, style="TFrame")
         stats_frame.pack(fill="x", pady=10)
         
-        # Créer une grille pour les statistiques
+        # Créer une grille horizontale pour les statistiques
         grid_frame = ttk.Frame(stats_frame, style="TFrame")
         grid_frame.pack(fill="x", padx=5, pady=5)
         
@@ -967,29 +967,34 @@ class ModernWebScraperApp:
             ("Progression", "0/0 (0%)", f"{prefix}_stats_progress")
         ]
         
+        # Disposition horizontale au lieu de verticale
         for i, (label_text, value_text, var_name) in enumerate(stats_items):
+            # Créer un cadre pour chaque paire étiquette/valeur
+            item_frame = ttk.Frame(grid_frame, style="TFrame")
+            item_frame.grid(row=0, column=i, padx=10, pady=2)
+            
             # Étiquette
             label = ttk.Label(
-                grid_frame, 
+                item_frame, 
                 text=f"{label_text}:", 
                 background=COLORS["card"],
                 foreground=COLORS["text_secondary"],
                 font=("Segoe UI", 9)
             )
-            label.grid(row=i, column=0, sticky="w", padx=5, pady=2)
+            label.pack(side="left", padx=(0, 5))
             
             # Valeur (stockée dans une variable StringVar pour mise à jour facile)
             var = tk.StringVar(value=value_text)
             setattr(self, var_name, var)
             
             value = ttk.Label(
-                grid_frame, 
+                item_frame, 
                 textvariable=var, 
                 background=COLORS["card"],
                 foreground=COLORS["primary_dark"],
                 font=("Segoe UI", 9, "bold")
             )
-            value.grid(row=i, column=1, sticky="e", padx=5, pady=2)
+            value.pack(side="left")
         
         return stats_frame
 

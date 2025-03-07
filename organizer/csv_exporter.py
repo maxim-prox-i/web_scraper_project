@@ -8,8 +8,12 @@ import time
 import datetime
 import json
 import glob
+import sys
+# Ajouter le répertoire racine du projet au chemin Python
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tqdm import tqdm
 import subprocess
+from utils.common_utils import extract_domain, ensure_data_directory
 
 
 class URLToCSVExporter:
@@ -27,11 +31,29 @@ class URLToCSVExporter:
         self.base_dir = base_dir
         self.year = str(year)  # Convertir en string pour assurer la compatibilité
         
+        # Déterminer le domaine à partir du chemin
+        path_parts = base_dir.split(os.sep)
+        domain_index = -1
+        for i, part in enumerate(path_parts):
+            if part == "data" and i+1 < len(path_parts):
+                domain_index = i+1
+                break
+        
+        if domain_index >= 0 and domain_index < len(path_parts):
+            self.domain = path_parts[domain_index]
+        else:
+            self.domain = "unknown_domain"
+        
         # Définir le fichier de sortie
         if output_file:
-            self.output_file = output_file
+            if os.path.isabs(output_file):
+                self.output_file = output_file
+            else:
+                domain_dir = ensure_data_directory(self.domain)
+                self.output_file = os.path.join(domain_dir, output_file)
         else:
-            self.output_file = f"urls_{self.year}.csv"
+            domain_dir = ensure_data_directory(self.domain)
+            self.output_file = os.path.join(domain_dir, f"urls_{self.year}.csv")
         
         # Statistiques
         self.stats = {
@@ -232,7 +254,31 @@ class MultiYearURLExporter:
         """
         self.base_dir = base_dir
         self.years = years if years else []  # Liste des années à exporter
-        self.output_file = output_file
+        
+        # Déterminer le domaine à partir du chemin
+        path_parts = base_dir.split(os.sep)
+        domain_index = -1
+        for i, part in enumerate(path_parts):
+            if part == "data" and i+1 < len(path_parts):
+                domain_index = i+1
+                break
+        
+        if domain_index >= 0 and domain_index < len(path_parts):
+            self.domain = path_parts[domain_index]
+        else:
+            self.domain = "unknown_domain"
+        
+        self.domain_dir = ensure_data_directory(self.domain)
+        
+        # Définir le fichier de sortie
+        if output_file:
+            if os.path.isabs(output_file):
+                self.output_file = output_file
+            else:
+                self.output_file = os.path.join(self.domain_dir, output_file)
+        else:
+            self.output_file = None
+        
         self.combine_into_one = combine_into_one  # Option pour combiner toutes les années dans un seul fichier
         
         # Statistiques
