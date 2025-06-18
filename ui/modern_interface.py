@@ -1171,28 +1171,51 @@ class ModernWebScraperApp:
         frame = self.tab_exporter
         
         # Variables
+        self.exporter_mode = tk.StringVar(value="organized")  # "organized" ou "direct"
         self.exporter_base_dir = tk.StringVar(value="")
         self.exporter_output_file = tk.StringVar(value="")
         self.exporter_combine = tk.BooleanVar(value=False)
+        self.exporter_direct_input = tk.StringVar(value="")  # Pour l'export direct
+        self.exporter_direct_output = tk.StringVar(value="")  # Pour l'export direct
         
         # Conteneur principal
         main_frame = ttk.Frame(frame, style="TFrame")
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
         
+        # Carte de sélection du mode
+        mode_card = Card(main_frame, title="Mode d'Exportation")
+        mode_card.pack(fill="x", pady=(0, 20))
+        
+        # Options de mode
+        mode_frame = ttk.Frame(mode_card, style="TFrame")
+        mode_frame.pack(fill="x", pady=10)
+        
+        ttk.Radiobutton(mode_frame, text="📂 Export depuis structure organisée (par années)",
+                    variable=self.exporter_mode, value="organized",
+                    command=self._on_exporter_mode_change).pack(anchor="w", pady=5)
+        
+        ttk.Radiobutton(mode_frame, text="📄 Export direct depuis fichier URLs",
+                    variable=self.exporter_mode, value="direct",
+                    command=self._on_exporter_mode_change).pack(anchor="w", pady=5)
+        
         # Créer une structure à deux colonnes
-        left_frame = ttk.Frame(main_frame, style="TFrame")
+        content_frame = ttk.Frame(main_frame, style="TFrame")
+        content_frame.pack(fill="both", expand=True)
+        
+        left_frame = ttk.Frame(content_frame, style="TFrame")
         left_frame.pack(side="left", fill="both", expand=True, padx=(0, 10))
         
-        right_frame = ttk.Frame(main_frame, style="TFrame")
+        right_frame = ttk.Frame(content_frame, style="TFrame")
         right_frame.pack(side="right", fill="both", expand=True, padx=(10, 0))
         
-        # Carte des paramètres (gauche)
-        params_card = Card(left_frame, title="Paramètres d'Exportation")
-        params_card.pack(fill="both", expand=True)
+        # === MODE ORGANISÉ ===
+        # Carte des paramètres pour l'export organisé (gauche)
+        self.organized_params_card = Card(left_frame, title="Paramètres d'Exportation Organisée")
+        self.organized_params_card.pack(fill="both", expand=True)
         
-        # Champs de formulaire
+        # Champs de formulaire pour l'export organisé
         base_dir_field = self.create_field(
-            params_card, 
+            self.organized_params_card, 
             "Répertoire des années:", 
             self.exporter_base_dir, 
             self._browse_exporter_base_dir, 
@@ -1201,19 +1224,19 @@ class ModernWebScraperApp:
         base_dir_field.pack(fill="x", pady=10)
         
         # Bouton de scan
-        scan_frame = ttk.Frame(params_card, style="TFrame")
+        scan_frame = ttk.Frame(self.organized_params_card, style="TFrame")
         scan_frame.pack(fill="x", pady=5)
         
-        scan_button = ModernButton(
+        self.scan_button = ModernButton(
             scan_frame, 
             text="🔍 Scanner les années disponibles", 
             command=self._scan_available_years,
             style="secondary"
         )
-        scan_button.pack(pady=5)
+        self.scan_button.pack(pady=5)
         
         # Options d'exportation
-        options_frame = ttk.Frame(params_card, style="TFrame")
+        options_frame = ttk.Frame(self.organized_params_card, style="TFrame")
         options_frame.pack(fill="x", pady=10)
         
         combine_check = ttk.Checkbutton(
@@ -1225,7 +1248,7 @@ class ModernWebScraperApp:
         combine_check.pack(anchor="w", pady=5)
         
         output_field = self.create_field(
-            params_card, 
+            self.organized_params_card, 
             "Fichier de sortie (CSV):", 
             self.exporter_output_file, 
             self._browse_exporter_output, 
@@ -1233,8 +1256,32 @@ class ModernWebScraperApp:
         )
         output_field.pack(fill="x", pady=10)
         
-        # Bouton de démarrage
-        button_frame = ttk.Frame(params_card, style="TFrame")
+        # === MODE DIRECT ===
+        # Carte des paramètres pour l'export direct (gauche, cachée initialement)
+        self.direct_params_card = Card(left_frame, title="Paramètres d'Exportation Directe")
+        # Ne pas pack initialement, sera géré par _on_exporter_mode_change
+        
+        # Champs de formulaire pour l'export direct
+        direct_input_field = self.create_field(
+            self.direct_params_card, 
+            "Fichier URLs (txt):", 
+            self.exporter_direct_input, 
+            self._browse_exporter_direct_input, 
+            tooltip="Sélectionnez le fichier contenant les URLs à exporter."
+        )
+        direct_input_field.pack(fill="x", pady=10)
+        
+        direct_output_field = self.create_field(
+            self.direct_params_card, 
+            "Fichier de sortie (CSV):", 
+            self.exporter_direct_output, 
+            self._browse_exporter_direct_output, 
+            tooltip="Choisissez où enregistrer le fichier CSV."
+        )
+        direct_output_field.pack(fill="x", pady=10)
+        
+        # Bouton de démarrage (commun aux deux modes)
+        button_frame = ttk.Frame(left_frame, style="TFrame")
         button_frame.pack(fill="x", pady=(20, 10))
         
         self.exporter_start_button = ModernButton(
@@ -1245,12 +1292,12 @@ class ModernWebScraperApp:
         )
         self.exporter_start_button.pack(pady=10)
         
-        # Carte des années (droite)
-        years_card = Card(right_frame, title="Années disponibles")
-        years_card.pack(fill="both", expand=True, pady=(0, 20))
+        # Carte des années (droite, seulement pour mode organisé)
+        self.years_card = Card(right_frame, title="Années disponibles")
+        self.years_card.pack(fill="both", expand=True, pady=(0, 20))
         
         # Cadre défilable pour les années
-        self.years_scrollable = ScrollableFrame(years_card)
+        self.years_scrollable = ScrollableFrame(self.years_card)
         self.years_scrollable.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Notification initiale
@@ -1274,6 +1321,9 @@ class ModernWebScraperApp:
         # Zone de journal
         self.exporter_log, log_frame = self.create_log_area(progress_card)
         log_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Initialiser le mode par défaut
+        self._on_exporter_mode_change()
     
     def _init_keywords_tab(self):
         """Initialise l'onglet Recherche de Mots Clés avec un design moderne."""
@@ -1383,6 +1433,197 @@ class ModernWebScraperApp:
         # Ajouter le panneau de statistiques
         self._init_stats_panel(progress_card, "keywords")
     
+    def _on_exporter_mode_change(self):
+        """Gère le changement de mode d'exportation."""
+        mode = self.exporter_mode.get()
+        
+        if mode == "organized":
+            # Afficher les widgets du mode organisé
+            self.organized_params_card.pack(fill="both", expand=True)
+            self.years_card.pack(fill="both", expand=True, pady=(0, 20))
+            
+            # Cacher les widgets du mode direct
+            self.direct_params_card.pack_forget()
+            
+            # Mettre à jour le titre du bouton
+            self.exporter_start_button.config(text="▶️ Démarrer l'Exportation Organisée")
+            
+        elif mode == "direct":
+            # Cacher les widgets du mode organisé
+            self.organized_params_card.pack_forget()
+            self.years_card.pack_forget()
+            
+            # Afficher les widgets du mode direct
+            self.direct_params_card.pack(fill="both", expand=True)
+            
+            # Mettre à jour le titre du bouton
+            self.exporter_start_button.config(text="▶️ Démarrer l'Exportation Directe")
+
+    def _browse_exporter_direct_input(self):
+        """Ouvre une boîte de dialogue pour sélectionner le fichier d'URLs pour l'export direct."""
+        filename = filedialog.askopenfilename(
+            initialdir=".",
+            title="Sélectionner le fichier contenant les URLs",
+            filetypes=(("Fichiers texte", "*.txt"), ("Tous les fichiers", "*.*"))
+        )
+        if filename:
+            self.exporter_direct_input.set(filename)
+            # Auto-remplir le fichier de sortie
+            if not self.exporter_direct_output.get():
+                base_name = os.path.splitext(os.path.basename(filename))[0]
+                output_file = f"{base_name}_export.csv"
+                self.exporter_direct_output.set(output_file)
+            self.status_bar.set_status(f"Fichier d'URLs sélectionné: {filename}")
+
+    def _browse_exporter_direct_output(self):
+        """Ouvre une boîte de dialogue pour sélectionner le fichier de sortie CSV pour l'export direct."""
+        filename = filedialog.asksaveasfilename(
+            initialdir=".",
+            title="Sélectionner le fichier de sortie CSV",
+            filetypes=(("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*"))
+        )
+        if filename:
+            if not filename.endswith('.csv'):
+                filename += '.csv'
+            self.exporter_direct_output.set(filename)
+            self.status_bar.set_status(f"Fichier de sortie sélectionné: {filename}")
+
+    def _start_direct_exporter(self):
+        """Démarre le processus d'exportation directe."""
+        # Vérification des inputs
+        input_file = self.exporter_direct_input.get().strip()
+        output_file = self.exporter_direct_output.get().strip()
+        
+        if not input_file:
+            messagebox.showerror("Erreur", "Veuillez sélectionner un fichier d'URLs.")
+            return
+        
+        if not os.path.exists(input_file):
+            messagebox.showerror("Erreur", f"Le fichier {input_file} n'existe pas.")
+            return
+        
+        if not output_file:
+            messagebox.showerror("Erreur", "Veuillez spécifier un fichier de sortie.")
+            return
+        
+        # Désactiver le bouton de démarrage pendant le traitement
+        self.exporter_start_button.config(state="disabled")
+        
+        # Réinitialiser la barre de progression et le log
+        self.exporter_progress["value"] = 0
+        self.exporter_log.delete(1.0, tk.END)
+        
+        # Ajouter des informations stylisées au log
+        self.add_log_header(self.exporter_log, "DÉMARRAGE DE L'EXPORTATION DIRECTE")
+        self.add_log_info(self.exporter_log, f"Fichier d'entrée: {input_file}")
+        self.add_log_info(self.exporter_log, f"Fichier de sortie: {output_file}")
+        self.add_log_separator(self.exporter_log)
+        self.exporter_log.see(tk.END)
+        
+        # Mettre à jour la barre de statut
+        self.status_bar.set_status(f"Exportation directe en cours...")
+        
+        # Démarrer l'exportation dans un thread séparé
+        self.current_process = threading.Thread(
+            target=self._run_direct_exporter,
+            args=(input_file, output_file)
+        )
+        self.current_process.daemon = True
+        self.current_process.start()
+
+    def _run_direct_exporter(self, input_file, output_file):
+        """Exécute l'exportateur direct dans un thread séparé."""
+        try:
+            # Importer la nouvelle classe
+            from organizer.csv_exporter import DirectURLExporter
+            
+            # Créer et exécuter l'exportateur
+            exporter = DirectURLExporter(input_file, output_file)
+            
+            # Callback pour mettre à jour la progression
+            def update_progress(current, max_val, message):
+                self.queue.put(("exporter_progress", current, max_val, message))
+            
+            # Exécuter l'exportation
+            result = exporter.export_urls_to_csv(update_progress)
+            
+            # Mettre à jour l'interface avec le résultat
+            if result:
+                self.queue.put(("exporter_complete", True, {
+                    "total_urls": exporter.stats["total_urls"],
+                    "output_file": output_file,
+                    "export_type": "direct"
+                }))
+            else:
+                self.queue.put(("exporter_error", "L'exportation directe n'a pas pu être terminée correctement."))
+            
+        except Exception as e:
+            self.queue.put(("exporter_error", str(e)))
+
+    def _start_organized_exporter(self):
+        """Démarre le processus d'exportation des URLs vers CSV (mode organisé)."""
+        # Vérification des inputs
+        base_dir = self.exporter_base_dir.get().strip()
+        output_file = self.exporter_output_file.get().strip()
+        combine = self.exporter_combine.get()
+        
+        if not base_dir:
+            messagebox.showerror("Erreur", "Veuillez sélectionner un répertoire de base.")
+            return
+        
+        if not os.path.exists(base_dir):
+            messagebox.showerror("Erreur", f"Le répertoire {base_dir} n'existe pas.")
+            return
+        
+        # Récupérer les années sélectionnées
+        if not hasattr(self, 'year_vars') or not self.year_vars:
+            messagebox.showerror("Erreur", "Aucune année disponible. Cliquez sur 'Scanner' pour détecter les années.")
+            return
+        
+        selected_years = [year for year, var in self.year_vars.items() if var.get()]
+        
+        if not selected_years:
+            messagebox.showerror("Erreur", "Veuillez sélectionner au moins une année.")
+            return
+        
+        # Désactiver le bouton de démarrage pendant le traitement
+        self.exporter_start_button.config(state="disabled")
+        
+        # Réinitialiser la barre de progression et le log
+        self.exporter_progress["value"] = 0
+        self.exporter_log.delete(1.0, tk.END)
+        
+        # Ajouter des informations stylisées au log
+        self.add_log_header(self.exporter_log, "DÉMARRAGE DE L'EXPORTATION CSV")
+        
+        if combine:
+            self.add_log_info(self.exporter_log, f"Mode: Exportation combinée")
+            self.add_log_info(self.exporter_log, f"Années sélectionnées: {', '.join(selected_years)}")
+            if output_file:
+                self.add_log_info(self.exporter_log, f"Fichier de sortie: {output_file}")
+            else:
+                default_name = f"urls_combinees_{'-'.join(selected_years)}.csv"
+                self.add_log_info(self.exporter_log, f"Fichier de sortie (par défaut): {default_name}")
+        else:
+            self.add_log_info(self.exporter_log, f"Mode: Exportation séparée")
+            self.add_log_info(self.exporter_log, f"Années sélectionnées: {', '.join(selected_years)}")
+        
+        self.add_log_separator(self.exporter_log)
+        self.exporter_log.see(tk.END)
+        
+        # Mettre à jour la barre de statut
+        self.status_bar.set_status(f"Exportation des URLs en cours...")
+        
+        # Démarrer l'exportation dans un thread séparé
+        self.current_process = threading.Thread(
+            target=self._run_exporter,
+            args=(base_dir, selected_years, output_file, combine)
+        )
+        self.current_process.daemon = True
+        self.current_process.start()
+
+    # Aussi modifier la méthode _exporter_complete pour gérer les deux types d'export
+
     #endregion
     
     def _browse_keywords_input(self):
@@ -2055,67 +2296,14 @@ class ModernWebScraperApp:
             self.queue.put(("organizer_error", str(e)))
     
     def _start_exporter(self):
-        """Démarre le processus d'exportation des URLs vers CSV."""
-        # Vérification des inputs
-        base_dir = self.exporter_base_dir.get().strip()
-        output_file = self.exporter_output_file.get().strip()
-        combine = self.exporter_combine.get()
+        """Démarre le processus d'exportation selon le mode sélectionné."""
+        mode = self.exporter_mode.get()
         
-        if not base_dir:
-            messagebox.showerror("Erreur", "Veuillez sélectionner un répertoire de base.")
-            return
-        
-        if not os.path.exists(base_dir):
-            messagebox.showerror("Erreur", f"Le répertoire {base_dir} n'existe pas.")
-            return
-        
-        # Récupérer les années sélectionnées
-        if not hasattr(self, 'year_vars') or not self.year_vars:
-            messagebox.showerror("Erreur", "Aucune année disponible. Cliquez sur 'Scanner' pour détecter les années.")
-            return
-        
-        selected_years = [year for year, var in self.year_vars.items() if var.get()]
-        
-        if not selected_years:
-            messagebox.showerror("Erreur", "Veuillez sélectionner au moins une année.")
-            return
-        
-        # Désactiver le bouton de démarrage pendant le traitement
-        self.exporter_start_button.config(state="disabled")
-        
-        # Réinitialiser la barre de progression et le log
-        self.exporter_progress["value"] = 0
-        self.exporter_log.delete(1.0, tk.END)
-        
-        # Ajouter des informations stylisées au log
-        self.add_log_header(self.exporter_log, "DÉMARRAGE DE L'EXPORTATION CSV")
-        
-        if combine:
-            self.add_log_info(self.exporter_log, f"Mode: Exportation combinée")
-            self.add_log_info(self.exporter_log, f"Années sélectionnées: {', '.join(selected_years)}")
-            if output_file:
-                self.add_log_info(self.exporter_log, f"Fichier de sortie: {output_file}")
-            else:
-                default_name = f"urls_combinees_{'-'.join(selected_years)}.csv"
-                self.add_log_info(self.exporter_log, f"Fichier de sortie (par défaut): {default_name}")
+        if mode == "direct":
+            self._start_direct_exporter()
         else:
-            self.add_log_info(self.exporter_log, f"Mode: Exportation séparée")
-            self.add_log_info(self.exporter_log, f"Années sélectionnées: {', '.join(selected_years)}")
-        
-        self.add_log_separator(self.exporter_log)
-        self.exporter_log.see(tk.END)
-        
-        # Mettre à jour la barre de statut
-        self.status_bar.set_status(f"Exportation des URLs en cours...")
-        
-        # Démarrer l'exportation dans un thread séparé
-        self.current_process = threading.Thread(
-            target=self._run_exporter,
-            args=(base_dir, selected_years, output_file, combine)
-        )
-        self.current_process.daemon = True
-        self.current_process.start()
-    
+            self._start_organized_exporter()
+
     def _run_exporter(self, base_dir, years, output_file, combine):
         """Exécute l'exportateur dans un thread séparé."""
         try:
@@ -2552,52 +2740,80 @@ class ModernWebScraperApp:
         if result:
             self.add_log_success(self.exporter_log, "Exportation terminée avec succès!")
             
-            total_urls = stats.get("total_urls", 0)
-            years_data = stats.get("years", {})
-            output_files = []
+            # Vérifier le type d'export
+            export_type = stats.get("export_type", "organized")
             
-            # Récupérer les noms des fichiers créés
-            combine = self.exporter_combine.get()
-            if combine:
-                # Pour l'export combiné
-                output_file = self.exporter_output_file.get().strip()
-                if not output_file:
-                    years_str = '-'.join(sorted(years_data.keys()))
-                    output_file = f"urls_combinees_{years_str}.csv"
-                output_files.append(output_file)
-            else:
-                # Pour les exports séparés par année
-                for year in years_data.keys():
-                    output_files.append(f"urls_{year}.csv")
-            
-            self.add_log_info(self.exporter_log, f"Total d'URLs exportées: {total_urls}")
-            
-            message_popup = f"L'exportation est terminée avec succès!\n\nTotal d'URLs exportées: {total_urls}\n"
-            
-            if years_data:
-                self.add_log_info(self.exporter_log, "\nURLs par année:")
-                message_popup += "\nURLs par année:\n"
-                for year, count in years_data.items():
-                    self.add_log_info(self.exporter_log, f"  {year}: {count} URLs")
-                    message_popup += f"  {year}: {count} URLs\n"
-            
-            message_popup += "\nFichiers créés:\n"
-            for file_path in output_files:
-                message_popup += f"- {file_path}\n"
-            
-            # Ajouter les boutons pour ouvrir les dossiers
-            buttons_frame = ttk.Frame(self.exporter_log.master)
-            buttons_frame.pack(fill="x", pady=10)
-            
-            for file_path in output_files:
-                if os.path.exists(file_path):
+            if export_type == "direct":
+                # Export direct
+                total_urls = stats.get("total_urls", 0)
+                output_file = stats.get("output_file", "")
+                
+                self.add_log_info(self.exporter_log, f"Total d'URLs exportées: {total_urls}")
+                self.add_log_info(self.exporter_log, f"Fichier créé: {output_file}")
+                
+                message_popup = f"L'exportation directe est terminée avec succès!\n\nTotal d'URLs exportées: {total_urls}\n\nFichier créé:\n{output_file}"
+                
+                # Ajouter le bouton pour ouvrir le dossier
+                if output_file and os.path.exists(output_file):
+                    buttons_frame = ttk.Frame(self.exporter_log.master)
+                    buttons_frame.pack(fill="x", pady=10)
+                    
                     open_button = ModernButton(
                         buttons_frame, 
-                        text=f"📂 Ouvrir le dossier pour {os.path.basename(file_path)}", 
-                        command=lambda p=file_path: self._open_folder(p),
+                        text=f"📂 Ouvrir le dossier contenant {os.path.basename(output_file)}", 
+                        command=lambda: self._open_folder(output_file),
                         style="secondary"
                     )
                     open_button.pack(pady=5)
+            
+            else:
+                # Export organisé (code existant)
+                total_urls = stats.get("total_urls", 0)
+                years_data = stats.get("years", {})
+                output_files = []
+                
+                # Récupérer les noms des fichiers créés
+                combine = self.exporter_combine.get()
+                if combine:
+                    # Pour l'export combiné
+                    output_file = self.exporter_output_file.get().strip()
+                    if not output_file:
+                        years_str = '-'.join(sorted(years_data.keys()))
+                        output_file = f"urls_combinees_{years_str}.csv"
+                    output_files.append(output_file)
+                else:
+                    # Pour les exports séparés par année
+                    for year in years_data.keys():
+                        output_files.append(f"urls_{year}.csv")
+                
+                self.add_log_info(self.exporter_log, f"Total d'URLs exportées: {total_urls}")
+                
+                message_popup = f"L'exportation est terminée avec succès!\n\nTotal d'URLs exportées: {total_urls}\n"
+                
+                if years_data:
+                    self.add_log_info(self.exporter_log, "\nURLs par année:")
+                    message_popup += "\nURLs par année:\n"
+                    for year, count in years_data.items():
+                        self.add_log_info(self.exporter_log, f"  {year}: {count} URLs")
+                        message_popup += f"  {year}: {count} URLs\n"
+                
+                message_popup += "\nFichiers créés:\n"
+                for file_path in output_files:
+                    message_popup += f"- {file_path}\n"
+                
+                # Ajouter les boutons pour ouvrir les dossiers
+                buttons_frame = ttk.Frame(self.exporter_log.master)
+                buttons_frame.pack(fill="x", pady=10)
+                
+                for file_path in output_files:
+                    if os.path.exists(file_path):
+                        open_button = ModernButton(
+                            buttons_frame, 
+                            text=f"📂 Ouvrir le dossier pour {os.path.basename(file_path)}", 
+                            command=lambda p=file_path: self._open_folder(p),
+                            style="secondary"
+                        )
+                        open_button.pack(pady=5)
         else:
             self.add_log_warning(self.exporter_log, "L'exportation n'a pas pu être complétée.")
             message_popup = "L'exportation n'a pas pu être complétée."
@@ -2609,7 +2825,7 @@ class ModernWebScraperApp:
         self.status_bar.set_status("Exportation terminée.")
         
         # Afficher un message final
-        messagebox.showinfo("Exportation terminée", "L'exportation des URLs est terminée!")
+        messagebox.showinfo("Exportation terminée", message_popup)
         
     def _open_folder(self, filepath):
         """Ouvre l'explorateur de fichiers au dossier contenant le fichier spécifié"""

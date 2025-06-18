@@ -16,6 +16,203 @@ import subprocess
 from utils.common_utils import extract_domain, ensure_data_directory
 
 
+class DirectURLExporter:
+    """Classe pour exporter directement un fichier d'URLs vers un fichier CSV."""
+    
+    def __init__(self, input_file, output_file=None):
+        """
+        Initialise l'exporteur direct d'URLs vers CSV.
+        
+        Args:
+            input_file (str): Fichier contenant les URLs (format .txt)
+            output_file (str, optional): Nom du fichier CSV de sortie
+        """
+        self.input_file = input_file
+        
+        # Déterminer le domaine à partir du fichier ou du contenu
+        parent_dir = os.path.basename(os.path.dirname(os.path.abspath(input_file)))
+        if parent_dir != "data" and not parent_dir.startswith('.'):
+            self.domain = parent_dir
+        else:
+            # Essayer de déterminer le domaine à partir de la première URL
+            self.domain = "unknown_domain"
+            try:
+                with open(input_file, 'r', encoding='utf-8') as f:
+                    first_url = f.readline().strip()
+                    if first_url:
+                        self.domain = extract_domain(first_url)
+            except:
+                pass
+        
+        # Définir le fichier de sortie
+        if output_file:
+            if os.path.isabs(output_file):
+                self.output_file = output_file
+            else:
+                domain_dir = ensure_data_directory(self.domain)
+                self.output_file = os.path.join(domain_dir, output_file)
+        else:
+            domain_dir = ensure_data_directory(self.domain)
+            base_name = os.path.splitext(os.path.basename(input_file))[0]
+            self.output_file = os.path.join(domain_dir, f"{base_name}_export.csv")
+        
+        # Statistiques
+        self.stats = {
+            "input_file": self.input_file,
+            "output_file": self.output_file,
+            "total_urls": 0,
+            "start_time": datetime.datetime.now().isoformat()
+        }
+    
+    def format_time(self, seconds):
+        """Formate les secondes en format HH:MM:SS"""
+        if seconds == float('inf'):
+            return "Inconnu"
+        
+        hours, remainder = divmod(int(seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    
+    def export_urls_to_csv(self, progress_callback=None):
+        """
+        Exporte directement les URLs d'un fichier texte vers un fichier CSV
+        
+        Args:
+            progress_callback (callable, optional): Fonction callback pour mettre à jour la progression
+                Signature: callback(current_progress, max_progress, status_message)
+                
+        Returns:
+            bool: True si l'export a réussi, False sinon
+        """
+        start_time = time.time()
+        
+        # Vérifier si le fichier d'entrée existe
+        if not os.path.exists(self.input_file):
+            error_msg = f"Erreur : Le fichier {self.input_file} n'existe pas"
+            print(error_msg)
+            if progress_callback:
+                progress_callback(0, 0, error_msg)
+            return False
+        
+        # Compter le nombre total d'URLs
+        try:
+            with open(self.input_file, 'r', encoding='utf-8') as f:
+                urls = [line.strip() for line in f if line.strip()]
+        except Exception as e:
+            error_msg = f"Erreur lors de la lecture du fichier {self.input_file}: {str(e)}"
+            print(error_msg)
+            if progress_callback:
+                progress_callback(0, 0, error_msg)
+            return False
+        
+        total_urls = len(urls)
+        self.stats["total_urls"] = total_urls
+        
+        if total_urls == 0:
+            error_msg = "Aucune URL trouvée dans le fichier"
+            print(error_msg)
+            if progress_callback:
+                progress_callback(0, 0, error_msg)
+            return False
+        
+        if progress_callback:
+            progress_callback(0, total_urls, f"Démarrage de l'export direct pour {total_urls} URLs")
+        
+        # Créer le fichier CSV
+        try:
+            with open(self.output_file, 'w', encoding='utf-8', newline='') as csvfile:
+                # Définir les en-têtes
+                fieldnames = ["_id", "Name", "type", "Data", "Metadata", "Url", "Page", "Train status"]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=';', quotechar='"', quoting=csv.QUOTE_ALL)
+                
+                # Écrire l'en-tête
+                writer.writeheader()
+                
+                # Initialiser la barre de progression
+                pbar = tqdm(total=total_urls, desc="Export direct des URLs", 
+                        bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
+                
+                # Traitement par lots pour de meilleures performances
+                batch_size = 1000
+                rows_batch = []
+                
+                for i, url in enumerate(urls):
+                    if url:  # Vérifier que l'URL n'est pas vide
+                        row = {
+                            "_id": "",
+                            "Name": "",
+                            "type": "web-site",
+                            "Data": url,
+                            "Metadata": "",
+                            "Url": "",
+                            "Page": url,
+                            "Train status": ""
+                        }
+                        rows_batch.append(row)
+                        
+                        # Si le lot atteint la taille maximale, écrire et réinitialiser
+                        if len(rows_batch) >= batch_size:
+                            writer.writerows(rows_batch)
+                            pbar.update(len(rows_batch))
+                            rows_batch = []
+                            
+                            # Mettre à jour le callback
+                            if progress_callback:
+                                progress_callback(i + 1, total_urls, 
+                                                f"Export direct: {i + 1}/{total_urls} URLs")
+                
+                # Écrire le reste du lot
+                if rows_batch:
+                    writer.writerows(rows_batch)
+                    pbar.update(len(rows_batch))
+                    
+                    # Mettre à jour le callback
+                    if progress_callback:
+                        progress_callback(total_urls, total_urls, 
+                                        f"Export direct: {total_urls}/{total_urls} URLs")
+                
+                # Fermer la barre de progression
+                pbar.close()
+        
+        except Exception as e:
+            error_msg = f"Erreur lors de l'écriture du fichier CSV: {str(e)}"
+            print(error_msg)
+            if progress_callback:
+                progress_callback(0, 0, error_msg)
+            return False
+        
+        # Temps écoulé
+        elapsed_time = time.time() - start_time
+        
+        # Mettre à jour les statistiques
+        self.stats["elapsed_time"] = elapsed_time
+        self.stats["elapsed_time_formatted"] = self.format_time(elapsed_time)
+        self.stats["end_time"] = datetime.datetime.now().isoformat()
+        
+        # Sauvegarder les statistiques
+        stats_file = f"{os.path.splitext(self.output_file)[0]}_stats.json"
+        try:
+            with open(stats_file, 'w', encoding='utf-8') as f:
+                json.dump(self.stats, f, indent=2)
+        except Exception as e:
+            print(f"Avertissement: Impossible de sauvegarder les statistiques: {e}")
+        
+        # Message final
+        final_status = f"Export direct terminé en {self.format_time(elapsed_time)}\n" \
+                    f"URLs exportées: {self.stats['total_urls']}\n" \
+                    f"Fichier CSV créé: {self.output_file}"
+        
+        print(final_status)
+        if os.path.exists(stats_file):
+            print(f"Statistiques sauvegardées dans: {stats_file}")
+        
+        # Mise à jour finale du callback de progression
+        if progress_callback:
+            progress_callback(total_urls, total_urls, final_status)
+        
+        return True
+
+
 class URLToCSVExporter:
     """Classe pour exporter les URLs d'une année spécifique vers un fichier CSV."""
     
@@ -490,78 +687,108 @@ class MultiYearURLExporter:
 
 
 if __name__ == "__main__":
-    print("=== EXTRACTEUR D'URLs MULTI-ANNÉES VERS CSV ===")
-    print("Ce script permet d'exporter les URLs de plusieurs années dans des fichiers CSV.")
+    print("=== EXTRACTEUR D'URLs VERS CSV ===")
+    print("Ce script permet d'exporter des URLs dans des fichiers CSV.")
+    print("1. Export direct d'un fichier texte d'URLs")
+    print("2. Export multi-années depuis une structure organisée")
     
-    # Demander le répertoire contenant les dossiers organisés par année
-    base_dir = input("Répertoire contenant les dossiers par année: ")
-    if not os.path.exists(base_dir):
-        print(f"Erreur: Le répertoire {base_dir} n'existe pas.")
-        exit(1)
+    choice = input("\nChoisissez le type d'export (1 ou 2): ")
     
-    # Récupérer les années disponibles
-    available_years = []
-    for item in os.listdir(base_dir):
-        if os.path.isdir(os.path.join(base_dir, item)) and item.isdigit():
-            available_years.append(item)
+    if choice == "1":
+        # Export direct
+        input_file = input("Fichier contenant les URLs (ex: urls.txt): ")
+        if not os.path.exists(input_file):
+            print(f"Erreur: Le fichier {input_file} n'existe pas.")
+            exit(1)
+        
+        output_file = input("Nom du fichier CSV de sortie (laissez vide pour auto): ") or None
+        
+        print(f"\nDémarrage de l'export direct depuis {input_file}")
+        
+        try:
+            exporter = DirectURLExporter(input_file, output_file)
+            result = exporter.export_urls_to_csv()
+            if result:
+                print("Export terminé avec succès!")
+            else:
+                print("Erreur lors de l'export.")
+        except Exception as e:
+            print(f"Une erreur est survenue: {e}")
     
-    available_years.sort()
+    elif choice == "2":
+        # Export multi-années (code existant)
+        base_dir = input("Répertoire contenant les dossiers par année: ")
+        if not os.path.exists(base_dir):
+            print(f"Erreur: Le répertoire {base_dir} n'existe pas.")
+            exit(1)
+        
+        # Récupérer les années disponibles
+        available_years = []
+        for item in os.listdir(base_dir):
+            if os.path.isdir(os.path.join(base_dir, item)) and item.isdigit():
+                available_years.append(item)
+        
+        available_years.sort()
+        
+        if not available_years:
+            print(f"Aucun dossier d'année trouvé dans {base_dir}")
+            exit(1)
+        
+        # Afficher les années disponibles
+        print("\nAnnées disponibles:")
+        for year in available_years:
+            print(f"  - {year}")
+        
+        # Options d'exportation
+        print("\nOptions d'exportation:")
+        print("1. Exporter toutes les années (un fichier CSV par année)")
+        print("2. Exporter une sélection d'années (un fichier CSV par année)")
+        print("3. Combiner toutes les années dans un seul fichier CSV")
+        print("4. Combiner une sélection d'années dans un seul fichier CSV")
+        
+        option = input("\nChoisissez une option (1-4): ")
+        
+        years_to_export = []
+        combine_into_one = False
+        
+        if option == "1":
+            years_to_export = available_years
+        elif option == "2":
+            year_input = input("Entrez les années à exporter, séparées par des virgules (ex: 2022,2023): ")
+            years_to_export = [year.strip() for year in year_input.split(",") if year.strip() in available_years]
+        elif option == "3":
+            years_to_export = available_years
+            combine_into_one = True
+        elif option == "4":
+            year_input = input("Entrez les années à combiner, séparées par des virgules (ex: 2022,2023): ")
+            years_to_export = [year.strip() for year in year_input.split(",") if year.strip() in available_years]
+            combine_into_one = True
+        else:
+            print("Option non valide.")
+            exit(1)
+        
+        if not years_to_export:
+            print("Aucune année valide sélectionnée.")
+            exit(1)
+        
+        # Demander le nom du fichier de sortie pour l'option combinée
+        output_file = None
+        if combine_into_one:
+            output_file = input(f"Nom du fichier CSV combiné (par défaut: urls_combinees_{'-'.join(years_to_export)}.csv): ") or None
+        
+        # Exécuter l'exportation
+        print(f"\nDémarrage de l'export pour {len(years_to_export)} année(s): {', '.join(years_to_export)}")
+        
+        try:
+            exporter = MultiYearURLExporter(base_dir, years_to_export, output_file, combine_into_one)
+            exporter.run()
+        except KeyboardInterrupt:
+            print("\nExport interrompu par l'utilisateur.")
+        except Exception as e:
+            print(f"\nUne erreur est survenue: {e}")
+            import traceback
+            traceback.print_exc()
     
-    if not available_years:
-        print(f"Aucun dossier d'année trouvé dans {base_dir}")
-        exit(1)
-    
-    # Afficher les années disponibles
-    print("\nAnnées disponibles:")
-    for year in available_years:
-        print(f"  - {year}")
-    
-    # Options d'exportation
-    print("\nOptions d'exportation:")
-    print("1. Exporter toutes les années (un fichier CSV par année)")
-    print("2. Exporter une sélection d'années (un fichier CSV par année)")
-    print("3. Combiner toutes les années dans un seul fichier CSV")
-    print("4. Combiner une sélection d'années dans un seul fichier CSV")
-    
-    option = input("\nChoisissez une option (1-4): ")
-    
-    years_to_export = []
-    combine_into_one = False
-    
-    if option == "1":
-        years_to_export = available_years
-    elif option == "2":
-        year_input = input("Entrez les années à exporter, séparées par des virgules (ex: 2022,2023): ")
-        years_to_export = [year.strip() for year in year_input.split(",") if year.strip() in available_years]
-    elif option == "3":
-        years_to_export = available_years
-        combine_into_one = True
-    elif option == "4":
-        year_input = input("Entrez les années à combiner, séparées par des virgules (ex: 2022,2023): ")
-        years_to_export = [year.strip() for year in year_input.split(",") if year.strip() in available_years]
-        combine_into_one = True
     else:
-        print("Option non valide.")
+        print("Choix non valide.")
         exit(1)
-    
-    if not years_to_export:
-        print("Aucune année valide sélectionnée.")
-        exit(1)
-    
-    # Demander le nom du fichier de sortie pour l'option combinée
-    output_file = None
-    if combine_into_one:
-        output_file = input(f"Nom du fichier CSV combiné (par défaut: urls_combinees_{'-'.join(years_to_export)}.csv): ") or None
-    
-    # Exécuter l'exportation
-    print(f"\nDémarrage de l'export pour {len(years_to_export)} année(s): {', '.join(years_to_export)}")
-    
-    try:
-        exporter = MultiYearURLExporter(base_dir, years_to_export, output_file, combine_into_one)
-        exporter.run()
-    except KeyboardInterrupt:
-        print("\nExport interrompu par l'utilisateur.")
-    except Exception as e:
-        print(f"\nUne erreur est survenue: {e}")
-        import traceback
-        traceback.print_exc()
