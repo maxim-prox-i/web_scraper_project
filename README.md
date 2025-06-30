@@ -6,39 +6,6 @@
 
 > 🎯 **Idéal pour** : Journalistes, chercheurs, analystes, étudiants, entrepreneurs, ou toute personne qui veut récupérer facilement des informations sur internet.
 
-## 🤔 Qu'est-ce que c'est ?
-
-Web Scraper Suite est un **outil gratuit et facile** qui vous permet de :
-- 📥 **Récupérer automatiquement** tous les liens d'un site web
-- 📅 **Extraire les dates** de publication des articles
-- 📂 **Organiser** tout par année et par mois
-- 📊 **Exporter** vers Excel/CSV pour vos analyses
-- 🔍 **Rechercher** des mots-clés spécifiques dans les pages
-
-**Pas besoin d'être informaticien !** L'interface est simple avec des boutons et des étapes claires.
-
-## ✨ Pourquoi l'utiliser ?
-
-### 🚀 **Gain de temps énorme**
-- Au lieu de copier-coller manuellement pendant des heures
-- Récupérez **des milliers de liens** en quelques minutes
-- Organisation automatique par date
-
-### 🎯 **Utilisations concrètes**
-- **Journalistes** : Analyser l'historique d'un site d'actualités
-- **Chercheurs** : Constituer un corpus d'articles scientifiques
-- **Étudiants** : Rassembler des sources pour un mémoire
-- **Entreprises** : Surveiller la concurrence ou analyser un marché
-- **Blogueurs** : Faire une veille sur un sujet
-
-### 💡 **Exemples réels**
-```
-🎯 Analyser 5 ans d'articles du Monde sur l'écologie
-🎯 Récupérer tous les communiqués de presse d'une entreprise
-🎯 Constituer une base de données d'articles scientifiques
-🎯 Surveiller les mentions d'une marque sur différents sites
-```
-
 ## 🎮 Comment ça marche ?
 
 ### **Interface simple en 4 étapes**
