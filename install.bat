@@ -10,13 +10,70 @@ echo.
 :: Vérifier si Python est installé
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ ERREUR: Python n'est pas installé ou pas dans le PATH
+    echo ⚠️  Python n'est pas détecté
     echo.
-    echo Veuillez installer Python depuis https://python.org
-    echo N'oubliez pas de cocher "Add Python to PATH"
+    echo 🔄 Installation automatique de Python...
+    echo.
+    
+    :: Essayer avec winget d'abord (Windows 10/11)
+    winget --version >nul 2>&1
+    if not errorlevel 1 (
+        echo 📦 Installation via Windows Package Manager...
+        winget install Python.Python.3.11 --accept-package-agreements --accept-source-agreements --silent
+        if not errorlevel 1 (
+            echo ✅ Python installé via winget
+            echo ⚠️  Redémarrage requis pour mettre à jour le PATH
+            echo    Relancez ce script après redémarrage
+            pause
+            exit /b 0
+        ) else (
+            echo ⚠️  Échec installation winget, tentative alternative...
+        )
+    )
+    
+    :: Alternative: téléchargement direct
+    echo 📥 Téléchargement de Python depuis python.org...
+    
+    :: Créer dossier temporaire
+    if not exist "temp" mkdir temp
+    
+    :: Télécharger Python (version 3.11.x recommandée)
+    powershell -Command "& {Invoke-WebRequest 'https://www.python.org/ftp/python/3.11.7/python-3.11.7-amd64.exe' -OutFile 'temp\python-installer.exe'}"
+    
+    if not exist "temp\python-installer.exe" (
+        echo ❌ ERREUR: Impossible de télécharger Python
+        echo.
+        echo Installation manuelle requise:
+        echo 1. Allez sur https://python.org/downloads
+        echo 2. Téléchargez Python 3.11+
+        echo 3. Cochez "Add Python to PATH" lors de l'installation
+        echo 4. Relancez ce script
+        echo.
+        pause
+        exit /b 1
+    )
+    
+    echo ✅ Python téléchargé
+    echo 🔄 Installation en cours...
+    echo    (Ceci peut prendre quelques minutes)
+    
+    :: Installer Python silencieusement avec PATH
+    temp\python-installer.exe /quiet InstallAllUsers=1 PrependPath=1 Include_test=0
+    
+    :: Nettoyer
+    if exist "temp\python-installer.exe" del "temp\python-installer.exe"
+    if exist "temp" rmdir "temp"
+    
+    echo ✅ Installation Python terminée
+    echo.
+    echo ⚠️  REDÉMARRAGE REQUIS
+    echo    Python a été installé mais le PATH doit être actualisé
+    echo    Veuillez:
+    echo    1. Redémarrer votre ordinateur
+    echo    2. Relancer ce script
     echo.
     pause
-    exit /b 1
+    exit /b 0
 )
 
 echo ✅ Python détecté
