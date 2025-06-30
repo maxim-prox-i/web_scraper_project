@@ -1,10 +1,41 @@
 # 🕷️ Web Scraper Suite
 
-- [Guide Installation](INSTALL.md)
-
 **L'outil tout-en-un pour récupérer et organiser automatiquement les données de sites web !**
 
 > 🎯 **Idéal pour** : Journalistes, chercheurs, analystes, étudiants, entrepreneurs, ou toute personne qui veut récupérer facilement des informations sur internet.
+
+## 🤔 Qu'est-ce que c'est ?
+
+Web Scraper Suite est un **outil gratuit et facile** qui vous permet de :
+- 📥 **Récupérer automatiquement** tous les liens d'un site web
+- 📅 **Extraire les dates** de publication des articles
+- 📂 **Organiser** tout par année et par mois
+- 📊 **Exporter** vers Excel/CSV pour vos analyses
+- 🔍 **Rechercher** des mots-clés spécifiques dans les pages
+
+**Pas besoin d'être informaticien !** L'interface est simple avec des boutons et des étapes claires.
+
+## ✨ Pourquoi l'utiliser ?
+
+### 🚀 **Gain de temps énorme**
+- Au lieu de copier-coller manuellement pendant des heures
+- Récupérez **des milliers de liens** en quelques minutes
+- Organisation automatique par date
+
+### 🎯 **Utilisations concrètes**
+- **Journalistes** : Analyser l'historique d'un site d'actualités
+- **Chercheurs** : Constituer un corpus d'articles scientifiques
+- **Étudiants** : Rassembler des sources pour un mémoire
+- **Entreprises** : Surveiller la concurrence ou analyser un marché
+- **Blogueurs** : Faire une veille sur un sujet
+
+### 💡 **Exemples réels**
+```
+🎯 Analyser 5 ans d'articles du Monde sur l'écologie
+🎯 Récupérer tous les communiqués de presse d'une entreprise
+🎯 Constituer une base de données d'articles scientifiques
+🎯 Surveiller les mentions d'une marque sur différents sites
+```
 
 ## 🎮 Comment ça marche ?
 
@@ -30,26 +61,30 @@ les liens          les dates           par année          vers Excel
 ## 🛠️ Installation Super Simple
 
 ### **Option 1 : Installation Automatique (Recommandée)**
-1. 📥 Téléchargez les fichiers du projet
-2. 🖱️ Double-cliquez sur `install.bat`
-3. ☕ Attendez que tout s'installe automatiquement
-4. ✅ C'est prêt !
+1. **📥 Clonez** le projet :
+   ```cmd
+   git clone https://github.com/maxim-prox-i/web_scraper_project.git
+   cd web_scraper_project
+   ```
+2. **🖱️ Double-cliquez** sur `install.bat`
+3. **☕ Attendez** que tout s'installe automatiquement
+4. **✅ C'est prêt !**
 
-### **Option 2 : Si vous avez déjà Python**
-```
-1. Ouvrez l'invite de commande
-2. Tapez : pip install requests beautifulsoup4 lxml tqdm
-3. Lancez : python main.py
-```
+### **Option 2 : Si vous n'avez pas Git**
+1. **📥 Téléchargez** le ZIP depuis https://github.com/maxim-prox-i/web_scraper_project
+2. **📂 Décompressez** dans un dossier
+3. **🖱️ Double-cliquez** sur `install.bat`
+4. **✅ C'est prêt !**
 
 > 💡 **Aucune expertise technique requise** - Les scripts d'installation font tout pour vous !
 
 ## 🚀 Guide de Démarrage
 
 ### **Premier lancement**
-1. Double-cliquez sur `start.bat` (créé automatiquement)
-2. Une fenêtre s'ouvre avec des onglets simples
-3. Suivez les étapes dans l'ordre !
+1. **Allez** dans le dossier `web_scraper_project`
+2. **Double-cliquez** sur `start.bat` (créé automatiquement)
+3. **Une fenêtre** s'ouvre avec des onglets simples
+4. **Suivez** les étapes dans l'ordre !
 
 ### **Onglet 1 : Scraper de Site** 🕷️
 - **URL du site** : Collez l'adresse du site (ex: https://lemonde.fr)
@@ -97,46 +132,8 @@ les liens          les dates           par année          vers Excel
 
 ### **Performance**
 - ⚡ **5,000 pages** analysées en 10 minutes
-- 📅 **80% de taux** de réussite pour les dates
-- 📊 **Export Excel** en quelques secondes
-
-## 🎯 Cas d'Usage Détaillés
-
-### **📰 Journalisme & Média**
-```
-Objectif : Analyser 3 ans d'articles sur un sujet
-Étapes :
-1. Scraper le site du journal
-2. Rechercher mot-clé "climat" dans tous les articles
-3. Organiser par mois pour voir les tendances
-4. Exporter pour faire des graphiques
-
-Résultat : Évolution du traitement médiatique dans le temps
-```
-
-### **🎓 Recherche Académique**
-```
-Objectif : Constituer un corpus de thèse
-Étapes :
-1. Scraper plusieurs sites scientifiques
-2. Extraire les dates de publication
-3. Filtrer par période d'étude (ex: 2020-2024)
-4. Organiser par année pour analyse temporelle
-
-Résultat : Base de données structurée pour la recherche
-```
-
-### **💼 Business Intelligence**
-```
-Objectif : Surveiller la concurrence
-Étapes :
-1. Scraper les sites des concurrents
-2. Rechercher mots-clés liés aux produits
-3. Organiser par mois les communiqués
-4. Analyser les tendances et annonces
-
-Résultat : Veille concurrentielle automatisée
-```
+- 📅 **80% de taux** de réussite pour les dates seulement si présente dans la page
+- 📊 **Export Excel**
 
 ## 🔧 Options Avancées (Optionnel)
 
@@ -207,9 +204,12 @@ start.bat  # Lance l'interface directement
 
 ## 💡 **Vous êtes prêt à économiser des heures de travail ?**
 
-1. 📥 **Téléchargez** les fichiers
-2. 🖱️ **Double-cliquez** sur `install.bat`  
-3. 🚀 **Lancez** votre première analyse !
+1. **📥 Clonez** le projet depuis GitHub :
+   ```cmd
+   git clone https://github.com/maxim-prox-i/web_scraper_project.git
+   ```
+2. **🖱️ Double-cliquez** sur `install.bat`  
+3. **🚀 Lancez** votre première analyse avec `start.bat` !
 
 **En 10 minutes, vous serez opérationnel !**
 

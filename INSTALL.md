@@ -6,7 +6,19 @@
 
 ### **Option 1 : Installation Automatique** ⭐ *Recommandée*
 
-1. **📥 Téléchargez** tous les fichiers du projet dans un dossier
+Ouvrir un invite de commande dans ton dosssier document (Win + R et taper "cmd")
+
+1. **📥 Clonez** le projet depuis GitHub copier les commandes suivante:
+   ```cmd
+   git clone https://github.com/maxim-prox-i/web_scraper_project.git
+   cd web_scraper_project
+   ```
+   
+   **OU si vous n'avez pas Git :**
+   - Allez sur https://github.com/maxim-prox-i/web_scraper_project
+   - Cliquez sur le bouton vert "Code" puis "Download ZIP"
+   - Décompressez le fichier dans un dossier
+
 2. **🖱️ Double-cliquez** sur le fichier `install.bat`
 3. **☕ Attendez** que l'installation se fasse toute seule
 4. **🎉 C'est fini !** 
@@ -17,10 +29,21 @@
 
 Si vous savez déjà que Python est installé sur votre PC :
 
-1. **Ouvrez** l'invite de commande Windows
-2. **Tapez** : `pip install requests beautifulsoup4 lxml tqdm python-dateutil fake-useragent urllib3`
-3. **Attendez** que ça s'installe
-4. **Lancez** l'outil avec : `python main.py`
+1. **Clonez** le projet :
+   ```cmd
+   git clone https://github.com/maxim-prox-i/web_scraper_project.git
+   cd web_scraper_project
+   ```
+
+2. **Installez** les dépendances :
+   ```cmd
+   pip install requests beautifulsoup4 lxml tqdm python-dateutil fake-useragent urllib3
+   ```
+
+3. **Lancez** l'outil :
+   ```cmd
+   python main.py
+   ```
 
 ## 🔍 Comment savoir si ça a marché ?
 
@@ -38,26 +61,30 @@ Si vous savez déjà que Python est installé sur votre PC :
 
 ### **Fichiers créés automatiquement**
 ```
-📁 Votre Dossier/
+📁 web_scraper_project/
   📁 venv/                    ← Environnement Python (ne pas toucher)
   📁 data/                    ← Vos données seront ici
   📄 start.bat               ← Pour lancer l'outil facilement
-  📄 requirements.txt        ← Liste des modules (créé si absent)
+  📄 requirements.txt        ← Liste des modules Python
+  📄 install.bat             ← Script d'installation
+  📄 update.bat              ← Script de mise à jour
+  📄 main.py                 ← Programme principal
   📄 ... autres fichiers Python
 ```
 
 ### **Ce qui se passe dans l'installation**
-1. **Vérification** : Python est-il installé ?
-2. **Installation Python** : Si absent, téléchargement automatique
-3. **Création environnement** : Espace isolé pour l'outil
-4. **Installation modules** : Tous les composants nécessaires
-5. **Test final** : Vérification que tout fonctionne
+1. **Clonage** : Récupération du code depuis GitHub
+2. **Vérification Python** : Python est-il installé ?
+3. **Installation Python** : Si absent, téléchargement automatique
+4. **Création environnement** : Espace isolé pour l'outil
+5. **Installation modules** : Tous les composants nécessaires
+6. **Test final** : Vérification que tout fonctionne
 
 ## 🚀 Premier Démarrage
 
 ### **Étape 1 : Lancer l'outil**
-- **Double-cliquez** sur `start.bat`
-- **OU** tapez `python main.py` dans l'invite de commande
+- **Double-cliquez** sur `start.bat` (dans le dossier `web_scraper_project`)
+- **OU** ouvrez l'invite de commande dans le dossier et tapez `python main.py`
 
 ### **Étape 2 : Interface**
 Une fenêtre s'ouvre avec **5 onglets** :
@@ -77,8 +104,23 @@ Si ça marche = **Tout est bon !** 🎉
 
 ## ❓ Questions Fréquentes
 
-### **🤔 Python ? C'est quoi ?**
-Python est un langage de programmation. L'outil d'installation le télécharge automatiquement pour vous.
+### **🤔 Je n'ai pas Git, comment faire ?**
+
+**Méthode 1 : Installer Git** (recommandé)
+1. Allez sur https://git-scm.com/download/win
+2. Téléchargez Git pour Windows
+3. Installez avec les options par défaut
+4. Relancez l'invite de commande
+5. Tapez : `git clone https://github.com/maxim-prox-i/web_scraper_project.git`
+
+**Méthode 2 : Téléchargement ZIP**
+1. Allez sur https://github.com/maxim-prox-i/web_scraper_project
+2. Cliquez sur le bouton vert "**< > Code**"
+3. Cliquez sur "**Download ZIP**"
+4. Décompressez le fichier dans un dossier (ex: `C:\WebScraper`)
+5. Double-cliquez sur `install.bat`
+
+> ⚠️ **Important** : Avec la méthode ZIP, vous ne pourrez pas utiliser `update.bat` pour les mises à jour
 
 ### **💻 Ça marche sur quel Windows ?**
 - Windows 10 ✅
@@ -166,18 +208,25 @@ pip install --upgrade certifi requests urllib3
 
 ## 🔄 Mise à Jour
 
-### **Méthode automatique**
+### **Méthode automatique** (si vous avez Git)
 1. **Double-cliquez** sur `update.bat`
 2. **Choisissez** votre branche si demandé
 3. **Attendez** que la mise à jour se fasse
 
-### **Méthode manuelle**
-Si vous avez téléchargé une nouvelle version :
-1. **Remplacez** les fichiers Python
-2. **Gardez** le dossier `venv/` et `data/`
-3. **Relancez** `install.bat` si nécessaire
+### **Méthode manuelle** (si vous avez téléchargé le ZIP)
+1. **Sauvegardez** votre dossier `data/` (vos données)
+2. **Téléchargez** la nouvelle version depuis GitHub
+3. **Remplacez** tous les fichiers sauf le dossier `data/`
+4. **Relancez** `install.bat` si nécessaire
 
-## 💡 Conseils pour Bien Commencer
+### **🤔 Python ? C'est quoi ?**
+Python est un langage de programmation. L'outil d'installation le télécharge automatiquement pour vous.
+
+### **💻 Ça marche sur quel Windows ?**
+- Windows 10 ✅
+- Windows 11 ✅  
+- Windows 8 ⚠️ (peut-être)
+- Windows 7 ❌ (trop ancien)
 
 ### **🎯 Premiers tests**
 1. **Commencez petit** : 50-100 URLs maximum
