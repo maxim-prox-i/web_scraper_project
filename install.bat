@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 cls
 echo.
 echo =====================================================
@@ -10,29 +9,29 @@ echo.
 :: Vérifier si Python est installé
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ⚠️  Python n'est pas détecté
+    echo [AVERTISSEMENT] Python n'est pas detecte
     echo.
-    echo 🔄 Installation automatique de Python...
+    echo [INFO] Installation automatique de Python...
     echo.
     
     :: Essayer avec winget d'abord (Windows 10/11)
     winget --version >nul 2>&1
     if not errorlevel 1 (
-        echo 📦 Installation via Windows Package Manager...
+        echo [INFO] Installation via Windows Package Manager...
         winget install Python.Python.3.11 --accept-package-agreements --accept-source-agreements --silent
         if not errorlevel 1 (
-            echo ✅ Python installé via winget
-            echo ⚠️  Redémarrage requis pour mettre à jour le PATH
-            echo    Relancez ce script après redémarrage
+            echo [SUCCES] Python installe via winget
+            echo [AVERTISSEMENT] Redemarrage requis pour mettre a jour le PATH
+            echo    Relancez ce script apres redemarrage
             pause
             exit /b 0
         ) else (
-            echo ⚠️  Échec installation winget, tentative alternative...
+            echo [AVERTISSEMENT] Echec installation winget, tentative alternative...
         )
     )
     
     :: Alternative: téléchargement direct
-    echo 📥 Téléchargement de Python depuis python.org...
+    echo [INFO] Telechargement de Python depuis python.org...
     
     :: Créer dossier temporaire
     if not exist "temp" mkdir temp
@@ -41,11 +40,11 @@ if errorlevel 1 (
     powershell -Command "& {Invoke-WebRequest 'https://www.python.org/ftp/python/3.11.7/python-3.11.7-amd64.exe' -OutFile 'temp\python-installer.exe'}"
     
     if not exist "temp\python-installer.exe" (
-        echo ❌ ERREUR: Impossible de télécharger Python
+        echo [ERREUR] Impossible de telecharger Python
         echo.
         echo Installation manuelle requise:
         echo 1. Allez sur https://python.org/downloads
-        echo 2. Téléchargez Python 3.11+
+        echo 2. Telechargez Python 3.11+
         echo 3. Cochez "Add Python to PATH" lors de l'installation
         echo 4. Relancez ce script
         echo.
@@ -53,8 +52,8 @@ if errorlevel 1 (
         exit /b 1
     )
     
-    echo ✅ Python téléchargé
-    echo 🔄 Installation en cours...
+    echo [SUCCES] Python telecharge
+    echo [INFO] Installation en cours...
     echo    (Ceci peut prendre quelques minutes)
     
     :: Installer Python silencieusement avec PATH
@@ -64,73 +63,73 @@ if errorlevel 1 (
     if exist "temp\python-installer.exe" del "temp\python-installer.exe"
     if exist "temp" rmdir "temp"
     
-    echo ✅ Installation Python terminée
+    echo [SUCCES] Installation Python terminee
     echo.
-    echo ⚠️  REDÉMARRAGE REQUIS
-    echo    Python a été installé mais le PATH doit être actualisé
+    echo [AVERTISSEMENT] REDEMARRAGE REQUIS
+    echo    Python a ete installe mais le PATH doit etre actualise
     echo    Veuillez:
-    echo    1. Redémarrer votre ordinateur
+    echo    1. Redemarrer votre ordinateur
     echo    2. Relancer ce script
     echo.
     pause
     exit /b 0
 )
 
-echo ✅ Python détecté
+echo [SUCCES] Python detecte
 python --version
 
 :: Vérifier si pip est disponible
 pip --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ ERREUR: pip n'est pas disponible
+    echo [ERREUR] pip n'est pas disponible
     echo.
     pause
     exit /b 1
 )
 
-echo ✅ pip détecté
+echo [SUCCES] pip detecte
 echo.
 
 :: Créer l'environnement virtuel s'il n'existe pas
 if not exist "venv" (
-    echo 📦 Création de l'environnement virtuel...
+    echo [INFO] Creation de l'environnement virtuel...
     python -m venv venv
     if errorlevel 1 (
-        echo ❌ ERREUR: Impossible de créer l'environnement virtuel
+        echo [ERREUR] Impossible de creer l'environnement virtuel
         pause
         exit /b 1
     )
-    echo ✅ Environnement virtuel créé
+    echo [SUCCES] Environnement virtuel cree
 ) else (
-    echo ✅ Environnement virtuel existant trouvé
+    echo [SUCCES] Environnement virtuel existant trouve
 )
 
 :: Activer l'environnement virtuel
 echo.
-echo 🔄 Activation de l'environnement virtuel...
+echo [INFO] Activation de l'environnement virtuel...
 call venv\Scripts\activate.bat
 if errorlevel 1 (
-    echo ❌ ERREUR: Impossible d'activer l'environnement virtuel
+    echo [ERREUR] Impossible d'activer l'environnement virtuel
     pause
     exit /b 1
 )
 
 :: Mettre à jour pip
 echo.
-echo 🔄 Mise à jour de pip...
+echo [INFO] Mise a jour de pip...
 python -m pip install --upgrade pip --quiet
 if errorlevel 1 (
-    echo ⚠️  Avertissement: Impossible de mettre à jour pip
+    echo [AVERTISSEMENT] Impossible de mettre a jour pip
 ) else (
-    echo ✅ pip mis à jour
+    echo [SUCCES] pip mis a jour
 )
 
 :: Vérifier si requirements.txt existe
 if not exist "requirements.txt" (
     echo.
-    echo ❌ ERREUR: requirements.txt introuvable
+    echo [ERREUR] requirements.txt introuvable
     echo.
-    echo Création d'un requirements.txt minimal...
+    echo [INFO] Creation d'un requirements.txt minimal...
     echo requests>=2.28.0> requirements.txt
     echo beautifulsoup4>=4.11.0>> requirements.txt
     echo lxml>=4.9.0>> requirements.txt
@@ -138,20 +137,20 @@ if not exist "requirements.txt" (
     echo python-dateutil>=2.8.0>> requirements.txt
     echo fake-useragent>=1.2.0>> requirements.txt
     echo urllib3>=1.26.0>> requirements.txt
-    echo ✅ requirements.txt créé avec les dépendances de base
+    echo [SUCCES] requirements.txt cree avec les dependances de base
 )
 
 :: Installer les dépendances
 echo.
-echo 📦 Installation des dépendances...
+echo [INFO] Installation des dependances...
 echo    (Ceci peut prendre quelques minutes)
 echo.
 pip install -r requirements.txt
 if errorlevel 1 (
     echo.
-    echo ❌ ERREUR: Échec de l'installation des dépendances
+    echo [ERREUR] Echec de l'installation des dependances
     echo.
-    echo Tentative d'installation une par une...
+    echo [INFO] Tentative d'installation une par une...
     pip install requests
     pip install beautifulsoup4
     pip install lxml
@@ -163,27 +162,27 @@ if errorlevel 1 (
 
 :: Vérifier l'installation
 echo.
-echo 🔍 Vérification de l'installation...
-python -c "import requests, bs4, tqdm, dateutil; print('✅ Toutes les dépendances principales sont installées')" 2>nul
+echo [INFO] Verification de l'installation...
+python -c "import requests, bs4, tqdm, dateutil; print('[SUCCES] Toutes les dependances principales sont installees')" 2>nul
 if errorlevel 1 (
-    echo ⚠️  Certaines dépendances peuvent ne pas être installées correctement
-    echo    Vérifiez les messages d'erreur ci-dessus
+    echo [AVERTISSEMENT] Certaines dependances peuvent ne pas etre installees correctement
+    echo    Verifiez les messages d'erreur ci-dessus
 ) else (
-    echo ✅ Installation vérifiée avec succès
+    echo [SUCCES] Installation verifiee avec succes
 )
 
 :: Créer le dossier data s'il n'existe pas
 if not exist "data" (
     mkdir data
-    echo ✅ Dossier 'data' créé
+    echo [SUCCES] Dossier 'data' cree
 )
 
 echo.
 echo =====================================================
-echo             INSTALLATION TERMINÉE !
+echo             INSTALLATION TERMINEE !
 echo =====================================================
 echo.
-echo Pour démarrer l'application :
+echo Pour demarrer l'application :
 echo   1. Double-cliquez sur start.bat
 echo   OU
 echo   2. Tapez: python main.py
@@ -197,7 +196,7 @@ echo @echo off > start.bat
 echo call venv\Scripts\activate >> start.bat
 echo python main.py >> start.bat
 echo pause >> start.bat
-echo ✅ Script de démarrage 'start.bat' créé
+echo [SUCCES] Script de demarrage 'start.bat' cree
 
 echo.
 pause
