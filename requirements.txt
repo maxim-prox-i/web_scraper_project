@@ -1,0 +1,21 @@
+# Core dependencies
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+lxml>=4.9.0
+tqdm>=4.64.0
+python-dateutil>=2.8.0
+fake-useragent>=1.2.0
+
+# GUI dependencies
+tkinter>=8.6  # Généralement inclus avec Python
+
+# Optional optimizations
+urllib3[brotli]>=1.26.0
+charset-normalizer>=3.0.0
+
+# Dev dependencies (requirements-dev.txt)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=0.971
+pre-commit>=2.20.0
