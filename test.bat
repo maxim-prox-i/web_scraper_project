@@ -26,7 +26,7 @@ git --version >nul 2>&1
 if errorlevel 1 (
     echo [ECHEC] Git n'est pas installe ou pas dans le PATH
     echo         Solution: Installez Git depuis https://git-scm.com/download/win
-    echo         OU relancez install.bat
+    echo         OU relancez install_auto.bat
 ) else (
     echo [SUCCES] Git detecte
     git --version
@@ -44,7 +44,7 @@ if errorlevel 1 (
     echo [ECHEC] Python n'est pas installe ou pas dans le PATH
     echo         Solution: Installez Python depuis https://python.org/downloads
     echo         IMPORTANT: Cochez "Add Python to PATH" lors de l'installation
-    echo         OU relancez install.bat
+    echo         OU relancez install_auto.bat
 ) else (
     echo [SUCCES] Python detecte
     python --version
@@ -61,7 +61,7 @@ pip --version >nul 2>&1
 if errorlevel 1 (
     echo [ECHEC] pip n'est pas disponible
     echo         pip est normalement inclus avec Python
-    echo         Solution: Reinstallez Python ou relancez install.bat
+    echo         Solution: Reinstallez Python ou relancez install_auto.bat
 ) else (
     echo [SUCCES] pip detecte
     pip --version
@@ -77,14 +77,14 @@ echo [TEST 4/7] Verification de l'environnement virtuel...
 if not exist "venv" (
     echo [ECHEC] Dossier venv introuvable
     echo         L'environnement virtuel n'a pas ete cree
-    echo         Solution: Relancez install.bat
+    echo         Solution: Relancez install_auto.bat
     goto test_mainpy
 )
 
 if not exist "venv\Scripts\activate.bat" (
     echo [ECHEC] Fichier d'activation introuvable
     echo         L'environnement virtuel est corrompu
-    echo         Solution: Supprimez le dossier venv et relancez install.bat
+    echo         Solution: Supprimez le dossier venv et relancez install_auto.bat
     goto test_mainpy
 )
 
@@ -93,11 +93,11 @@ set venv_status=SUCCES
 
 :: Test d'activation
 echo [INFO] Test d'activation de l'environnement...
-call venv\Scripts\activate.bat
+call venv\Scripts\activate.bat >nul 2>&1
 if errorlevel 1 (
     echo [ECHEC] Impossible d'activer l'environnement virtuel
     echo         L'environnement peut etre corrompu
-    echo         Solution: Supprimez le dossier venv et relancez install.bat
+    echo         Solution: Supprimez le dossier venv et relancez install_auto.bat
     set venv_status=ECHEC
 ) else (
     echo [SUCCES] Environnement virtuel activable
@@ -183,11 +183,20 @@ if errorlevel 1 (
     echo   [OK] urllib3 detecte
 )
 
+:: Test tkinter
+python -c "import tkinter; print('  [OK] tkinter - interface graphique')" 2>nul
+if errorlevel 1 (
+    echo   [MANQUE] tkinter - interface graphique
+    set modules_missing=1
+) else (
+    echo   [OK] tkinter detecte
+)
+
 if defined modules_missing (
     echo.
     echo [ECHEC] Un ou plusieurs modules manquent
     echo         Solution: pip install -r requirements.txt
-    echo         OU relancez install.bat
+    echo         OU relancez install_auto.bat
 ) else (
     echo.
     echo [SUCCES] Tous les modules critiques sont installes
@@ -224,20 +233,41 @@ if not exist "main.py" (
 echo.
 
 :: ===============================================
-:: TEST 7: VERIFICATION DU DOSSIER DATA
+:: TEST 7: VERIFICATION DES DOSSIERS
 :: ===============================================
-echo [TEST 7/7] Verification du dossier de donnees...
+echo [TEST 7/7] Verification des dossiers de travail...
+
+set folder_issues=0
 
 if not exist "data" (
     echo [AVERTISSEMENT] Dossier data absent
     echo [INFO] Creation du dossier data...
     mkdir data
     echo [SUCCES] Dossier data cree
-    set data_status=SUCCES
 ) else (
     echo [SUCCES] Dossier data present
+)
+
+if not exist "scripts" (
+    echo [AVERTISSEMENT] Dossier scripts absent
+    echo [INFO] Creation du dossier scripts...
+    mkdir scripts
+    echo [SUCCES] Dossier scripts cree
+) else (
+    echo [SUCCES] Dossier scripts present
+)
+
+if not exist "start.bat" (
+    echo [AVERTISSEMENT] Fichier start.bat absent a la racine
+    set folder_issues=1
+) else (
+    echo [SUCCES] start.bat present a la racine
+)
+
+if !folder_issues! equ 0 (
     set data_status=SUCCES
 )
+
 echo.
 
 :: ===============================================
@@ -256,7 +286,7 @@ echo pip                          %pip_status%
 echo Environnement virtuel        %venv_status%
 echo Modules Python               %modules_status%
 echo Fichier principal (main.py)  %mainpy_status%
-echo Dossier data                 %data_status%
+echo Structure dossiers          %data_status%
 
 echo.
 
@@ -282,6 +312,7 @@ if %success_count% equ 7 (
     echo VOUS POUVEZ:
     echo 1. Lancer l'application avec: start.bat
     echo 2. OU executer directement: python main.py
+    echo 3. Tester avec: scripts\premier_test.bat
     echo.
 ) else if %success_count% geq 5 (
     echo [BON] La plupart des tests sont passes (%success_count%/7)
@@ -289,14 +320,14 @@ if %success_count% equ 7 (
     echo.
     echo ACTIONS RECOMMANDEES:
     echo 1. Corrigez les problemes mentionnes ci-dessus
-    echo 2. OU relancez install.bat pour reparer
+    echo 2. OU relancez install_auto.bat pour reparer
     echo.
 ) else if %success_count% geq 3 (
     echo [MOYEN] Certains composants manquent (%success_count%/7)
     echo [INFO] L'installation est incomplete
     echo.
     echo ACTIONS REQUISES:
-    echo 1. Relancez install.bat
+    echo 1. Relancez install_auto.bat
     echo 2. Suivez les solutions mentionnees pour chaque echec
     echo.
 ) else (
@@ -304,10 +335,10 @@ if %success_count% equ 7 (
     echo [INFO] L'application ne peut pas fonctionner correctement
     echo.
     echo ACTIONS URGENTES:
-    echo 1. Relancez completement install.bat
+    echo 1. Relancez completement install_auto.bat
     echo 2. Verifiez votre connexion internet
     echo 3. Verificz les permissions (execution en administrateur?)
-    echo 4. Consultez INSTALL.md pour plus de details
+    echo 4. Consultez le README.md pour plus de details
     echo.
 )
 
@@ -341,7 +372,19 @@ if errorlevel 1 (
 )
 
 echo.
+echo Structure du projet:
 echo Dossier actuel: %CD%
+echo Fichiers racine:
+if exist "main.py" echo   [OK] main.py
+if exist "start.bat" echo   [OK] start.bat
+if exist "test.bat" echo   [OK] test.bat
+if exist "install_auto.bat" echo   [OK] install_auto.bat
+if exist "requirements.txt" echo   [OK] requirements.txt
+echo Dossiers:
+if exist "data" echo   [OK] data/
+if exist "scripts" echo   [OK] scripts/
+if exist "venv" echo   [OK] venv/
+
 echo.
 
 :: ===============================================
@@ -354,7 +397,7 @@ if %success_count% lss 7 (
     echo.
     echo Pour resoudre les problemes:
     echo.
-    echo 1. SOLUTION SIMPLE: Relancez install.bat
+    echo 1. SOLUTION SIMPLE: Relancez install_auto.bat
     echo    Cette commande repare automatiquement la plupart des problemes
     echo.
     echo 2. SOLUTION MANUELLE:
@@ -366,7 +409,7 @@ if %success_count% lss 7 (
         echo    - Installez Git: https://git-scm.com/download/win
     )
     if "%venv_status%"=="ECHEC" (
-        echo    - Recreez l'environnement: rmdir /s /q venv puis install.bat
+        echo    - Recreez l'environnement: rmdir /s /q venv puis install_auto.bat
     )
     if "%modules_status%"=="ECHEC" (
         echo    - Installez les modules: pip install -r requirements.txt
@@ -376,13 +419,26 @@ if %success_count% lss 7 (
     echo    - Redemarrez votre ordinateur
     echo    - Verifiez votre antivirus (ajoutez le dossier aux exceptions)
     echo    - Executez en tant qu'administrateur
-    echo    - Consultez INSTALL.md pour plus de details
+    echo    - Consultez le README.md pour plus de details
     echo.
 )
 
 echo =====================================================
 echo               DIAGNOSTIC TERMINE
 echo =====================================================
+echo.
+
+if %success_count% equ 7 (
+    echo [PARFAIT] Installation completement fonctionnelle !
+    echo.
+    echo PROCHAINES ETAPES RECOMMANDEES:
+    echo 1. Lancez scripts\premier_test.bat pour apprendre
+    echo 2. Utilisez start.bat pour l'application principale
+    echo 3. Consultez le README.md pour plus d'informations
+) else (
+    echo [ACTION REQUISE] Consultez les suggestions ci-dessus
+)
+
 echo.
 echo Appuyez sur une touche pour fermer cette fenetre...
 pause >nul

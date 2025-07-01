@@ -55,7 +55,7 @@ set "python_installed=0"
 :: ===============================================
 :: PHASE 1: PREPARATION
 :: ===============================================
-echo [PHASE 1/7] PREPARATION DU SYSTEME
+echo [PHASE 1/6] PREPARATION DU SYSTEME
 echo.
 
 echo [INFO] Verification des permissions...
@@ -99,7 +99,7 @@ echo.
 :: ===============================================
 :: PHASE 2: INSTALLATION DE WINGET (SI NECESSAIRE)
 :: ===============================================
-echo [PHASE 2/7] VERIFICATION DE WINDOWS PACKAGE MANAGER
+echo [PHASE 2/6] VERIFICATION DE WINDOWS PACKAGE MANAGER
 echo.
 
 winget --version >nul 2>&1
@@ -130,7 +130,7 @@ echo.
 :: ===============================================
 :: PHASE 3: INSTALLATION DE GIT
 :: ===============================================
-echo [PHASE 3/7] INSTALLATION DE GIT
+echo [PHASE 3/6] INSTALLATION DE GIT
 echo.
 
 git --version >nul 2>&1
@@ -154,8 +154,8 @@ if errorlevel 1 (
         echo [INFO] Installation manuelle de Git...
         echo [INFO] Telechargement de Git...
         
-        :: Télécharger Git
-        powershell -Command "& {Invoke-WebRequest 'https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.2/Git-2.42.0.2-64-bit.exe' -OutFile 'temp_install\git-installer.exe' -UseBasicParsing}" 2>nul
+        :: Télécharger Git avec version plus récente
+        powershell -Command "& {Invoke-WebRequest 'https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/Git-2.44.0-64-bit.exe' -OutFile 'temp_install\git-installer.exe' -UseBasicParsing}" 2>nul
         
         if exist "temp_install\git-installer.exe" (
             echo [SUCCES] Git telecharge
@@ -186,7 +186,7 @@ echo.
 :: ===============================================
 :: PHASE 4: INSTALLATION DE PYTHON
 :: ===============================================
-echo [PHASE 4/7] INSTALLATION DE PYTHON
+echo [PHASE 4/6] INSTALLATION DE PYTHON
 echo.
 
 python --version >nul 2>&1
@@ -210,8 +210,8 @@ if errorlevel 1 (
         echo [INFO] Installation manuelle de Python...
         echo [INFO] Telechargement de Python 3.11...
         
-        :: Télécharger Python
-        powershell -Command "& {Invoke-WebRequest 'https://www.python.org/ftp/python/3.11.7/python-3.11.7-amd64.exe' -OutFile 'temp_install\python-installer.exe' -UseBasicParsing}" 2>nul
+        :: Télécharger Python version plus récente
+        powershell -Command "& {Invoke-WebRequest 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe' -OutFile 'temp_install\python-installer.exe' -UseBasicParsing}" 2>nul
         
         if exist "temp_install\python-installer.exe" (
             echo [SUCCES] Python telecharge
@@ -255,7 +255,7 @@ if !need_reboot! equ 1 (
     echo.
     echo Apres le redemarrage :
     echo 1. Revenez dans ce dossier
-    echo 2. Double-cliquez sur ce fichier install_auto.bat
+    echo 2. Double-cliquez sur install_auto.bat
     echo 3. L'installation continuera automatiquement
     echo.
     echo Voulez-vous redemarrer maintenant ? (RECOMMANDE)
@@ -265,15 +265,7 @@ if !need_reboot! equ 1 (
     
     if /i "!reboot_choice!"=="O" (
         echo [INFO] Redemarrage programme dans 10 secondes...
-        echo [INFO] IMPORTANT: Relancez ce script apres le redemarrage !
-        
-        :: Créer un script de reprise automatique
-        echo @echo off> resume_install.bat
-        echo cd /d "%CD%">> resume_install.bat
-        echo install_auto.bat>> resume_install.bat
-        
-        echo.
-        echo Un raccourci 'resume_install.bat' a ete cree pour reprendre l'installation.
+        echo [INFO] IMPORTANT: Relancez install_auto.bat apres le redemarrage !
         echo.
         
         shutdown /r /t 10 /c "Redemarrage pour finaliser l'installation de Git et Python"
@@ -295,7 +287,7 @@ echo.
 :: ===============================================
 :: PHASE 5: VERIFICATION POST-INSTALLATION
 :: ===============================================
-echo [PHASE 5/7] VERIFICATION DES INSTALLATIONS
+echo [PHASE 5/6] VERIFICATION DES INSTALLATIONS
 echo.
 
 echo [INFO] Test de Git...
@@ -336,7 +328,7 @@ echo.
 :: ===============================================
 :: PHASE 6: CONFIGURATION DU PROJET
 :: ===============================================
-echo [PHASE 6/7] CONFIGURATION DU PROJET WEB SCRAPER
+echo [PHASE 6/6] CONFIGURATION DU PROJET WEB SCRAPER
 echo.
 
 echo [INFO] Verification de la presence du projet...
@@ -362,9 +354,11 @@ if not exist "main.py" (
                 echo [INFO] Decompression du projet...
                 powershell -Command "& {Expand-Archive 'temp_install\project.zip' -DestinationPath 'temp_install\' -Force}"
                 
-                :: Déplacer les fichiers
-                move "temp_install\web_scraper_project-main\*" . >nul 2>&1
-                rmdir /s /q "temp_install\web_scraper_project-main" >nul 2>&1
+                :: Déplacer les fichiers avec gestion d'erreurs améliorée
+                robocopy "temp_install\web_scraper_project-main" "." /E /MOVE /NJH /NJS >nul 2>&1
+                if exist "temp_install\web_scraper_project-main" (
+                    rmdir /s /q "temp_install\web_scraper_project-main" >nul 2>&1
+                )
                 
                 echo [SUCCES] Projet telecharge et decompresse
             ) else (
@@ -376,8 +370,10 @@ if not exist "main.py" (
             )
         ) else (
             :: Déplacer les fichiers du dossier temp_project vers le dossier courant
-            move "temp_project\*" . >nul 2>&1
-            rmdir /s /q temp_project >nul 2>&1
+            robocopy "temp_project" "." /E /MOVE /NJH /NJS >nul 2>&1
+            if exist "temp_project" (
+                rmdir /s /q temp_project >nul 2>&1
+            )
             echo [SUCCES] Projet clone via Git
         )
     ) else (
@@ -423,14 +419,17 @@ if errorlevel 1 (
 echo [INFO] Verification/creation du fichier requirements.txt...
 if not exist "requirements.txt" (
     echo [INFO] Creation du fichier requirements.txt...
-    echo # Core dependencies> requirements.txt
-    echo requests^>=2.28.0>> requirements.txt
-    echo beautifulsoup4^>=4.11.0>> requirements.txt
-    echo lxml^>=4.9.0>> requirements.txt
-    echo tqdm^>=4.64.0>> requirements.txt
-    echo python-dateutil^>=2.8.0>> requirements.txt
-    echo fake-useragent^>=1.2.0>> requirements.txt
-    echo urllib3^>=1.26.0>> requirements.txt
+    (
+        echo # Core dependencies
+        echo requests^>=2.31.0
+        echo beautifulsoup4^>=4.12.0
+        echo lxml^>=4.9.0
+        echo tqdm^>=4.66.0
+        echo python-dateutil^>=2.8.0
+        echo fake-useragent^>=1.4.0
+        echo urllib3^>=2.0.0
+        echo tkinter
+    ) > requirements.txt
     echo [SUCCES] requirements.txt cree
 )
 
@@ -462,67 +461,13 @@ if not exist "data" (
     echo [SUCCES] Dossier 'data' deja present
 )
 
-echo.
-
-:: ===============================================
-:: PHASE 7: CREATION DES SCRIPTS DE LANCEMENT
-:: ===============================================
-echo [PHASE 7/7] CREATION DES SCRIPTS DE LANCEMENT
-echo.
-
-echo [INFO] Creation du script start.bat...
-echo @echo off> start.bat
-echo cls>> start.bat
-echo echo =====================================================>> start.bat
-echo echo         WEB SCRAPER SUITE - DEMARRAGE>> start.bat
-echo echo =====================================================>> start.bat
-echo echo.>> start.bat
-echo echo [INFO] Activation de l'environnement Python...>> start.bat
-echo call venv\Scripts\activate.bat>> start.bat
-echo if errorlevel 1 (>> start.bat
-echo     echo [ERREUR] Environnement virtuel non trouve>> start.bat
-echo     echo Relancez install_auto.bat pour reparer>> start.bat
-echo     pause>> start.bat
-echo     exit /b 1>> start.bat
-echo )>> start.bat
-echo echo [SUCCES] Environnement Python active>> start.bat
-echo echo [INFO] Verification des dependances...>> start.bat
-echo pip install -r requirements.txt --quiet>> start.bat
-echo echo [INFO] Lancement de l'application...>> start.bat
-echo echo.>> start.bat
-echo python main.py>> start.bat
-echo if errorlevel 1 (>> start.bat
-echo     echo [ERREUR] Erreur lors du lancement>> start.bat
-echo     echo Verifiez que tous les fichiers sont presents>> start.bat
-echo     pause>> start.bat
-echo )>> start.bat
-echo echo.>> start.bat
-echo pause>> start.bat
-
-echo [SUCCES] Script start.bat cree
-
-echo [INFO] Creation du script test.bat...
-echo @echo off> test.bat
-echo echo =====================================================>> test.bat
-echo echo           TEST DE L'INSTALLATION>> test.bat
-echo echo =====================================================>> test.bat
-echo echo.>> test.bat
-echo call venv\Scripts\activate.bat>> test.bat
-echo python -c "import requests, bs4, tqdm, dateutil; print('SUCCES: Tous les modules sont installes')">> test.bat
-echo if errorlevel 1 (>> test.bat
-echo     echo ERREUR: Certains modules manquent>> test.bat
-echo     echo Relancez install_auto.bat pour reparer>> test.bat
-echo ) else (>> test.bat
-echo     echo.>> test.bat
-echo     echo Installation parfaitement fonctionnelle !>> test.bat
-echo     echo Vous pouvez maintenant utiliser start.bat pour lancer l'application>> test.bat
-echo )>> test.bat
-echo echo.>> test.bat
-echo pause>> test.bat
-
-echo [SUCCES] Script test.bat cree
-
-echo.
+echo [INFO] Creation du dossier scripts...
+if not exist "scripts" (
+    mkdir scripts
+    echo [SUCCES] Dossier 'scripts' cree
+) else (
+    echo [SUCCES] Dossier 'scripts' deja present
+)
 
 :: ===============================================
 :: NETTOYAGE ET TEST FINAL
@@ -531,10 +476,6 @@ echo [INFO] Nettoyage des fichiers temporaires...
 if exist "temp_install" (
     rmdir /s /q temp_install >nul 2>&1
     echo [SUCCES] Fichiers temporaires supprimes
-)
-
-if exist "resume_install.bat" (
-    del resume_install.bat >nul 2>&1
 )
 
 echo [INFO] Test final de l'installation...
@@ -573,11 +514,12 @@ if !install_success! equ 1 (
     echo.
     echo [EXCELLENT] Tous les composants sont installes et fonctionnels !
     echo.
-    echo FICHIERS CREES :
-    echo   ✓ start.bat    - Lance l'application
-    echo   ✓ test.bat     - Teste l'installation
-    echo   ✓ data/        - Dossier pour vos donnees
-    echo   ✓ venv/        - Environnement Python
+    echo FICHIERS PRESENTS :
+    echo   ✓ start.bat         - Lance l'application
+    echo   ✓ test.bat          - Teste l'installation  
+    echo   ✓ scripts/          - Scripts supplementaires
+    echo   ✓ data/             - Dossier pour vos donnees
+    echo   ✓ venv/             - Environnement Python
     echo.
     echo POUR COMMENCER :
     echo   1. Double-cliquez sur start.bat
@@ -586,7 +528,8 @@ if !install_success! equ 1 (
     echo.
     echo AIDE :
     echo   - test.bat : Verifie que tout fonctionne
-    echo   - update.bat : Met a jour l'application
+    echo   - scripts/update.bat : Met a jour l'application
+    echo   - scripts/premier_test.bat : Test guide interactif
     echo.
 ) else (
     color 0C
@@ -609,7 +552,7 @@ if !install_success! equ 1 (
     echo.
     echo SOLUTIONS :
     echo   1. Redemarrez votre PC
-    echo   2. Relancez ce script install_auto.bat
+    echo   2. Relancez install_auto.bat
     echo   3. Executez en tant qu'administrateur (clic droit)
     echo   4. Verifiez votre connexion internet
     echo   5. Desactivez temporairement l'antivirus
@@ -628,7 +571,11 @@ if /i "!launch_choice!"=="O" (
     if !install_success! equ 1 (
         echo.
         echo [INFO] Lancement de l'application...
-        start.bat
+        if exist "start.bat" (
+            call start.bat
+        ) else (
+            echo [ERREUR] start.bat non trouve - lancez manuellement : python main.py
+        )
     ) else (
         echo [ERREUR] Installation incomplete - impossible de lancer
         echo Corrigez les problemes ci-dessus et relancez ce script
