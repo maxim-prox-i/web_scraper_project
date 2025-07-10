@@ -251,50 +251,11 @@ C:\Users\VotreNom\Documents\web_scraper_project>_
 
 ## ⚙️ ÉTAPE 6 : Installation automatique de Web Scraper Suite
 
-### **6.1 - Lancer l'installation automatique**
-Dans l'invite de commande, tapez :
-```
-install_auto.bat
-```
+### **6.1 - Localiser le projet**
+Ouvre ton explorateur de fcihier et place toi dans "Documents > web_scraper_project"
 
-### **6.2 - Suivre les instructions**
-Le script vous posera des questions. **Répondez comme suit :**
-
-**Question 1 :**
-```
-Voulez-vous continuer l'installation automatique ? (O/N):
-```
-**→ Tapez : `O` puis `Entrée`**
-
-**Question 2 (si elle apparaît) :**
-```
-Voulez-vous redemarrer maintenant? (O/N)
-```
-**→ Tapez : `O` puis `Entrée`**
-
-*Si votre PC redémarre, refaites les étapes 1, 2 et 5.2, puis relancez `install_auto.bat`*
-
-**Question 3 (si elle apparaît) :**
-```
-Voulez-vous lancer l'application maintenant? (O/N)
-```
-**→ Tapez : `O` puis `Entrée`**
-
-### **6.3 - Vérifier le succès de l'installation**
-À la fin, vous devriez voir :
-```
-=====================================================
-             INSTALLATION TERMINEE !
-=====================================================
-
-[EXCELLENT] Tous les composants sont installes et fonctionnels !
-
-FICHIERS CREES :
-  ✓ start.bat    - Lance l'application
-  ✓ test.bat     - Teste l'installation
-  ✓ data/        - Dossier pour vos donnees
-  ✓ venv/        - Environnement Python
-```
+### **6.2 Lance l'installation**
+Pour cela doubre clique sur le fichier `install.bat`
 
 **✅ Installation réussie !**
 
