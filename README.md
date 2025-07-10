@@ -244,7 +244,7 @@ Resolving deltas: 100% (45/45), done.
 Ouvre ton explorateur de fcihier et place toi dans "Documents > web_scraper_project"
 
 ### **6.2 Lance l'installation**
-Pour cela doubre clique sur le fichier `install.bat`
+Pour cela doubre clique sur le fichier `0_install.bat`
 
 **✅ Installation réussie !**
 
@@ -252,7 +252,7 @@ Pour cela doubre clique sur le fichier `install.bat`
 
 ## 🎯 Workflow Recommandé pour Débuter
 
-- Lancer le programme avec le fichier `start.bat`
+- Lancer le programme avec le fichier `1_start.bat`
 
 ### **Premier test simple (5 minutes) :**
 ```
@@ -362,54 +362,12 @@ install_auto.bat
 ## 🔄 Mettre à jour vers la dernière version
 
 ### **Mise à jour automatique :**
-```
-cd %USERPROFILE%\Documents\web_scraper_project
-update.bat
-```
+Lancer : `2_update.bat`
 
 Ce script :
 - Télécharge les nouveautés
 - Met à jour les modules Python
 - Preserve vos données existantes
-
-### **Mise à jour manuelle :**
-Si `update.bat` ne fonctionne pas :
-
-1. **Sauvegardez vos données :**
-   ```
-   xcopy data data_backup /e /i
-   ```
-
-2. **Téléchargez la nouvelle version :**
-   ```
-   git pull origin main
-   ```
-
-3. **Réinstallez :**
-   ```
-   install_auto.bat
-   ```
-
----
-
-## 🧹 Nettoyage et Optimisation
-
-### **Libérer de l'espace :**
-```
-# Supprimer les fichiers temporaires
-del /q temp_*
-rmdir /s /q __pycache__
-
-# Nettoyer les logs anciens (gardez les 10 derniers)
-```
-
-### **Réinitialisation complète :**
-```
-# Supprime tout sauf vos données
-rmdir /s /q venv
-del *.log
-install_auto.bat
-```
 
 ---
 
@@ -487,6 +445,27 @@ intelligence -artificielle    # Intelligence mais pas artificielle
 
 ---
 
+## 🧹 Nettoyage et Optimisation (Expert uniquement)
+
+### **Libérer de l'espace :**
+```
+# Supprimer les fichiers temporaires
+del /q temp_*
+rmdir /s /q __pycache__
+
+# Nettoyer les logs anciens (gardez les 10 derniers)
+```
+
+### **Réinitialisation complète :**
+```
+# Supprime tout sauf vos données
+rmdir /s /q venv
+del *.log
+install_auto.bat
+```
+
+---
+
 ## 📞 Aide et Support
 
 ### **🆘 En cas de problème persistant :**
@@ -521,7 +500,7 @@ intelligence -artificielle    # Intelligence mais pas artificielle
 
 ---
 
-# 🌟 FONCTIONNALITÉS AVANCÉES
+# 🌟 FONCTIONNALITÉS AVANCÉES (Expert uniquement)
 
 ## 🤖 Automatisation
 
@@ -577,7 +556,7 @@ print(f'Scraping automatique: {len(urls)} URLs trouvées')
 - [ ] Choisir les bons paramètres pour un site
 - [ ] Organiser les résultats par date  
 - [ ] Rechercher des mots-clés spécifiques
-- [ ] Mettre à jour l'outil (`update.bat`)
+- [ ] Mettre à jour l'outil (`2_update.bat`)
 - [ ] Diagnostiquer les problèmes (`test.bat`)
 
 ---
@@ -601,7 +580,4 @@ start.bat
 **📈 Explorez, expérimentez, et découvrez tout ce que vous pouvez accomplir avec vos nouvelles données !**
 
 ---
-
-*Développé avec ❤️ pour simplifier la vie de tous ceux qui travaillent avec des données web*
-
-**Version :** 2024.1 | **Dernière mise à jour :** Juillet 2025
+**Version :** 0.5 | **Dernière mise à jour :** Juillet 2025
