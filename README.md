@@ -234,18 +234,7 @@ Receiving objects: 100% (150/150), 45.67 KiB | 1.14 MiB/s, done.
 Resolving deltas: 100% (45/45), done.
 ```
 
-### **5.2 - Aller dans le dossier du projet**
-Tapez :
-```
-cd web_scraper_project
-```
-
-**Vous devriez voir :**
-```
-C:\Users\VotreNom\Documents\web_scraper_project>_
-```
-
-**✅ Vous êtes maintenant dans le dossier du projet !**
+- Tu peux maintenat fermer cette page
 
 ---
 
@@ -258,104 +247,6 @@ Ouvre ton explorateur de fcihier et place toi dans "Documents > web_scraper_proj
 Pour cela doubre clique sur le fichier `install.bat`
 
 **✅ Installation réussie !**
-
----
-
-## 🧪 ÉTAPE 7 : Premier test
-
-### **7.1 - Test de l'installation**
-Dans l'invite de commande, tapez :
-```
-test.bat
-```
-
-**Vous devriez voir :**
-```
-[EXCELLENT] Tous les tests sont passes ! (7/7)
-[INFO] Votre installation est parfaitement fonctionnelle
-```
-
-### **7.2 - Premier test guidé**
-Tapez :
-```
-premier_test.bat
-```
-
-**Ce script va :**
-- Vous guider étape par étape
-- Tester l'outil sur un site simple
-- Créer vos premiers fichiers de résultats
-- Vous apprendre toutes les fonctionnalités
-
-**⏱️ Durée : 5-10 minutes**
-
-### **7.3 - Lancer l'application principale**
-Tapez :
-```
-start.bat
-```
-
-**→ Une fenêtre avec des onglets doit s'ouvrir !**
-
-**✅ Félicitations ! Votre installation est terminée et fonctionnelle !**
-
----
-
-# 🎮 GUIDE D'UTILISATION
-
-## 📊 Interface Principale - Les 5 Onglets
-
-Quand vous lancez `start.bat`, vous voyez une fenêtre avec 5 onglets :
-
-### **🕷️ Onglet 1 : Scraper de Site**
-**Ce qu'il fait :** Récupère tous les liens d'un site web
-
-**Comment l'utiliser :**
-1. **URL du site** : Collez l'adresse (ex: `https://lemonde.fr`)
-2. **Limite** : Nombre max de pages (ex: `100`, laissez vide = illimité)
-3. **Cliquez** : "▶️ Démarrer le Scraping"
-
-**Résultat :** Fichier `urls.txt` avec tous les liens trouvés
-
-### **📅 Onglet 2 : Extraction de Dates**
-**Ce qu'il fait :** Trouve les dates de publication des articles
-
-**Comment l'utiliser :**
-1. **Fichier d'entrée** : Sélectionnez votre fichier `urls.txt`
-2. **Processus** : 10 par défaut (plus = plus rapide)
-3. **Cliquez** : "▶️ Démarrer l'Extraction"
-
-**Résultat :** Fichier CSV avec liens + dates
-
-### **📂 Onglet 3 : Organisation par Date**
-**Ce qu'il fait :** Classe les articles par année et mois
-
-**Comment l'utiliser :**
-1. **Fichier CSV** : Sélectionnez votre fichier avec dates
-2. **Nom du projet** : Donnez un nom (ex: "Articles_LeMonde")
-3. **Cliquez** : "▶️ Démarrer l'Organisation"
-
-**Résultat :** Dossiers organisés par année/mois
-
-### **📊 Onglet 4 : Export Excel**
-**Ce qu'il fait :** Crée un fichier Excel pour vos analyses
-
-**Comment l'utiliser :**
-1. **Mode** : "Export direct" (recommandé pour débuter)
-2. **Format** : "Un seul fichier" (plus simple)
-3. **Cliquez** : "▶️ Démarrer l'Export"
-
-**Résultat :** Fichier Excel prêt pour analyse
-
-### **🔍 Onglet 5 : Recherche de Mots-clés**
-**Ce qu'il fait :** Trouve les articles contenant des mots spécifiques
-
-**Comment l'utiliser :**
-1. **Mots-clés** : Tapez les termes recherchés (ex: "intelligence artificielle")
-2. **Options** : Cochez selon vos besoins
-3. **Cliquez** : "▶️ Démarrer la Recherche"
-
-**Résultat :** Articles filtrés par mots-clés
 
 ---
 
