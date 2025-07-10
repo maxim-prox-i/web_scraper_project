@@ -130,16 +130,16 @@ git version 2.40.1.windows.1
 
 **Écrans importants :**
 - **"Select Components"** → ✅ Cochez **"Add a Git Bash Profile to Windows Terminal"** → Cliquer sur "next"
-- **"Choosing the default editor used bt Git"** → Cliquer sur "next"
-- **"Adjusting the name of the initial branch in the new repositories"** → Cliquer sur "next"
+- **"Choosing the default editor used by Git"** → Cliquer sur "next"
+- **"Adjusting the name of the initial branch in new repositories"** → Cliquer sur "next"
 - **"Adjusting your PATH environment"** → ✅ Sélectionnez **"Git from the command line and also from 3rd-party software"** → Cliquer sur "next"
 - **"Choosing the SSH executable"** → Cliquer sur "next"
 - **"Choosing HTTPS transport Backend"** → Cliquer sur "next"
 - **"Configuring the line ending conversions"** → Cliquer sur "next"
 - **"Configuring the terminal emulator to use with Git Bash"** → Cliquer sur "next"
-- **"Choose the default behavio of 'git pull'"** → Cliquer sur "next"
-- **"Choose a crediential helper"** → Cliquer sur "next"
-- **"Configuring extra option"** → Cliquer sur "Install" et attendre la fin de l'installation
+- **"Choose the default behavior of 'git pull'"** → Cliquer sur "next"
+- **"Choose a credential helper"** → Cliquer sur "next"
+- **"Configuring extra options"** → Cliquer sur "Install" et attendre la fin de l'installation
 - !! **Ne pas cocher la case "View Release Notes"**, pour ne pas avoir une page navigateur qui s'ouvre simplement
 - Cliquer sur "finish"
 
@@ -234,17 +234,17 @@ Receiving objects: 100% (150/150), 45.67 KiB | 1.14 MiB/s, done.
 Resolving deltas: 100% (45/45), done.
 ```
 
-- Tu peux maintenat fermer cette page
+- Vous pouvez maintenant fermer cette page
 
 ---
 
 ## ⚙️ ÉTAPE 6 : Installation automatique de Web Scraper Suite
 
 ### **6.1 - Localiser le projet**
-Ouvre ton explorateur de fcihier et place toi dans "Documents > web_scraper_project"
+Ouvrez votre explorateur de fichiers et placez-vous dans "Documents > web_scraper_project"
 
-### **6.2 Lance l'installation**
-Pour cela doubre clique sur le fichier `0_install.bat`
+### **6.2 - Lancer l'installation**
+Pour cela, double-cliquez sur le fichier `0_install.bat`
 
 **✅ Installation réussie !**
 
@@ -279,7 +279,7 @@ Tous vos fichiers sont sauvegardés dans le dossier `data/` :
 
 ```
 📁 web_scraper_project/
-  📁 data/ -> Les site seron ranger dans de dosssier
+  📁 data/ -> Les sites seront rangés dans ce dossier
 ```
 
 ---
@@ -367,7 +367,7 @@ Lancer : `2_update.bat`
 Ce script :
 - Télécharge les nouveautés
 - Met à jour les modules Python
-- Preserve vos données existantes
+- Préserve vos données existantes
 
 ---
 
@@ -470,7 +470,7 @@ install_auto.bat
 
 ### **🆘 En cas de problème persistant :**
 
-1. **Diagnostique automatique :**
+1. **Diagnostic automatique :**
    ```
    test.bat
    ```
@@ -489,7 +489,7 @@ install_auto.bat
    cd ..
    rmdir /s /q web_scraper_project
    
-   # Reinstallation depuis le début
+   # Réinstallation depuis le début
    git clone https://github.com/maxim-prox-i/web_scraper_project.git
    cd web_scraper_project
    install_auto.bat
@@ -568,7 +568,7 @@ print(f'Scraping automatique: {len(urls)} URLs trouvées')
 **Ce que vous pouvez faire maintenant :**
 - ✅ Analyser n'importe quel site web public
 - ✅ Organiser des milliers d'articles automatiquement  
-- ✅ Créer des bases de données Excel professionelles
+- ✅ Créer des bases de données Excel professionnelles
 - ✅ Effectuer des veilles automatisées
 - ✅ Gagner des heures de travail manuel
 
