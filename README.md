@@ -122,20 +122,26 @@ git version 2.40.1.windows.1
 ### **3.2 - Télécharger Git**
 1. **Ouvrez votre navigateur** (Chrome, Firefox, Edge...)
 2. **Allez sur** : https://git-scm.com/download/win
-3. **Cliquez sur** : "64-bit Git for Windows Setup" (le téléchargement commence automatiquement)
+3. **Cliquez sur** : "Git for Windows/x64 Setup" (le téléchargement commence automatiquement)
 
 ### **3.3 - Installer Git**
 1. **Ouvrez le fichier téléchargé** (`Git-X.X.X-64-bit.exe`)
 2. **Suivez l'installation avec ces paramètres :**
 
 **Écrans importants :**
-- **"Select Components"** → ✅ Cochez **"Add a Git Bash Profile to Windows Terminal"**
-- **"Adjusting your PATH environment"** → ✅ Sélectionnez **"Git from the command line and also from 3rd-party software"**
-- **"Choosing the default editor"** → Gardez par défaut (Vim)
-- **Autres écrans** → Gardez les paramètres par défaut
-
-3. **Cliquez "Install"** et attendez la fin
-4. **Cliquez "Finish"**
+- **"Select Components"** → ✅ Cochez **"Add a Git Bash Profile to Windows Terminal"** → Cliquer sur "next"
+- **"Choosing the default editor used bt Git"** → Cliquer sur "next"
+- **"Adjusting the name of the initial branch in the new repositories"** → Cliquer sur "next"
+- **"Adjusting your PATH environment"** → ✅ Sélectionnez **"Git from the command line and also from 3rd-party software"** → Cliquer sur "next"
+- **"Choosing the SSH executable"** → Cliquer sur "next"
+- **"Choosing HTTPS transport Backend"** → Cliquer sur "next"
+- **"Configuring the line ending conversions"** → Cliquer sur "next"
+- **"Configuring the terminal emulator to use with Git Bash"** → Cliquer sur "next"
+- **"Choose the default behavio of 'git pull'"** → Cliquer sur "next"
+- **"Choose a crediential helper"** → Cliquer sur "next"
+- **"Configuring extra option"** → Cliquer sur "Install" et attendre la fin de l'installation
+- !! **Ne pas cocher la case "View Release Notes"**, pour ne pas avoir une page navigateur qui s'ouvre simplement
+- Cliquer sur "finish"
 
 ### **3.4 - Redémarrer l'invite de commande**
 - **Fermez** la fenêtre noire actuelle
@@ -180,11 +186,11 @@ Python 3.11.5
 ### **4.2 - Télécharger Python**
 1. **Ouvrez votre navigateur**
 2. **Allez sur** : https://www.python.org/downloads/
-3. **Cliquez sur le gros bouton jaune** : "Download Python 3.11.X"
+3. **Cliquez sur le gros bouton jaune** : "Download Python 3.xx.x"
 
 ### **4.3 - Installer Python**
-1. **Ouvrez le fichier téléchargé** (`python-3.11.X-amd64.exe`)
-2. **⚠️ IMPORTANT :** Cochez **"Add Python 3.11 to PATH"** en bas de la fenêtre
+1. **Ouvrez le fichier téléchargé** (`python-3.xx.X-amd64.exe`)
+2. **⚠️ IMPORTANT :** Cochez **"Add Python 3.xx to PATH"** en bas de la fenêtre
 3. **Cliquez** : "Install Now"
 4. **Attendez la fin** de l'installation (5-10 minutes)
 5. **Cliquez** : "Close"
