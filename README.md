@@ -252,6 +252,8 @@ Pour cela doubre clique sur le fichier `install.bat`
 
 ## 🎯 Workflow Recommandé pour Débuter
 
+- Lancer le programme avec le fichier `start.bat`
+
 ### **Premier test simple (5 minutes) :**
 ```
 1. Onglet "Scraper" → URL: https://example.com → Limite: 10 → Démarrer
@@ -277,14 +279,7 @@ Tous vos fichiers sont sauvegardés dans le dossier `data/` :
 
 ```
 📁 web_scraper_project/
-  📁 data/
-    📄 urls.txt              (liens récupérés)
-    📄 urls_with_dates.csv   (liens + dates)
-    📄 export_final.csv      (fichier Excel)
-    📁 VotreProjet_2024/     (organisation par date)
-      📁 2024/
-        📁 01_Janvier/
-        📁 02_Février/
+  📁 data/ -> Les site seron ranger dans de dosssier
 ```
 
 ---
