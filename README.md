@@ -48,7 +48,7 @@ cd %USERPROFILE%\Documents
 ---
 
 ## ÉTAPE 3 : Installer Git (l'assistant de téléchargement)
-
+Dans la fenêtre noir taper la commande suivante puis Entrée
 **Testez d'abord si vous l'avez déjà :**
 ```
 git --version
@@ -70,7 +70,7 @@ git --version
 ---
 
 ## ÉTAPE 4 : Installer Python (le moteur du programme)
-
+Dans la fenêtre noir taper la commande suivante puis Entrée
 **Testez d'abord si vous l'avez déjà :**
 ```
 python --version
