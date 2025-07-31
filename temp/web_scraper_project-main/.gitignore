@@ -1,0 +1,50 @@
+# Fichiers byte-compilés Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Environnements virtuels
+venv/
+env/
+ENV/
+.env
+
+# Logs et fichiers générés
+*.log
+logs/
+*.urls.txt
+urls*.txt
+urls*.csv
+*-dates.csv
+*-stats.json
+stats*.json
+
+# Structures organisées des URLs
+urls_organisees/
+*/Sans_Date/
+
+# Fichiers de configuration locaux
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Fichiers de cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Fichiers spécifiques à l'application
+scraper.log
+date_extractor.log
+
+# Fichiers texte et csv même à la racine du projet
+.txt
+*.csv
+
+/data/*
