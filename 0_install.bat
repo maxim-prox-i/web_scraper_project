@@ -34,6 +34,7 @@ if not exist "requirements.txt" (
     echo lxml^>=4.9.0>>requirements.txt
     echo tqdm^>=4.66.0>>requirements.txt
     echo fake-useragent^>=1.4.0>>requirements.txt
+    echo python-dateutil^>=2.8.0>>requirements.txt
 )
 
 pip install -r requirements.txt --quiet
